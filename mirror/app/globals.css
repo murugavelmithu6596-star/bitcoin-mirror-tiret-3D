@@ -1,0 +1,320 @@
+:root {
+  --ink: #0c1218;
+  --ink-soft: #152029;
+  --mist: #8fa3b5;
+  --glass: rgba(214, 228, 240, 0.08);
+  --glass-strong: rgba(214, 228, 240, 0.14);
+  --mercury: #c9d8e6;
+  --mercury-bright: #e8f1f8;
+  --accent: #6eb5a4;
+  --accent-deep: #3d7a6d;
+  --danger: #d9897a;
+  --line: rgba(201, 216, 230, 0.18);
+  --shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  --radius: 22px;
+  --font-display: "Fraunces", "Iowan Old Style", Georgia, serif;
+  --font-body: "Outfit", "Avenir Next", "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--ink);
+  color: var(--mercury-bright);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  min-height: 100dvh;
+  background:
+    radial-gradient(1200px 700px at 80% -10%, rgba(110, 181, 164, 0.18), transparent 55%),
+    radial-gradient(900px 600px at -10% 20%, rgba(140, 170, 200, 0.16), transparent 50%),
+    linear-gradient(165deg, #0a1016 0%, #121c26 48%, #0d151d 100%);
+}
+
+button,
+textarea {
+  font: inherit;
+}
+
+a {
+  color: var(--accent);
+}
+
+.app-shell {
+  max-width: 720px;
+  margin: 0 auto;
+  min-height: 100dvh;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 14px;
+}
+
+.brand-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.brand {
+  font-family: var(--font-display);
+  font-weight: 560;
+  font-size: clamp(2rem, 8vw, 2.75rem);
+  letter-spacing: -0.03em;
+  line-height: 1;
+  margin: 0;
+  background: linear-gradient(120deg, #f4f8fc 10%, #9eb6c8 55%, #6eb5a4 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: brandIn 0.9s ease both;
+}
+
+.brand-meta {
+  text-align: right;
+  color: var(--mist);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.lock-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  color: var(--accent);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.hero-line {
+  margin: 0;
+  color: var(--mist);
+  font-size: 0.98rem;
+  max-width: 28ch;
+  animation: rise 0.8s ease 0.1s both;
+}
+
+.stage {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 12px;
+  min-height: 0;
+}
+
+.prompt-strip {
+  border: 1px solid var(--line);
+  background: var(--glass);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  backdrop-filter: blur(10px);
+  animation: rise 0.85s ease 0.18s both;
+}
+
+.prompt-strip p {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  line-height: 1.35;
+  color: var(--mercury-bright);
+}
+
+.prompt-strip span {
+  display: block;
+  margin-top: 6px;
+  color: var(--mist);
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.thread {
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 2px 8px;
+  min-height: 280px;
+  max-height: min(58dvh, 560px);
+  scroll-behavior: smooth;
+}
+
+.bubble {
+  max-width: 92%;
+  padding: 12px 14px;
+  border-radius: 18px;
+  line-height: 1.45;
+  font-size: 0.96rem;
+  white-space: pre-wrap;
+  animation: bubbleIn 0.35s ease both;
+}
+
+.bubble.user {
+  align-self: flex-end;
+  background: linear-gradient(145deg, rgba(110, 181, 164, 0.28), rgba(110, 181, 164, 0.12));
+  border: 1px solid rgba(110, 181, 164, 0.35);
+}
+
+.bubble.assistant {
+  align-self: flex-start;
+  background: var(--glass-strong);
+  border: 1px solid var(--line);
+}
+
+.bubble .who {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mist);
+}
+
+.empty {
+  margin: auto;
+  text-align: center;
+  color: var(--mist);
+  padding: 28px 12px;
+  animation: rise 1s ease 0.25s both;
+}
+
+.empty strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  color: var(--mercury-bright);
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.composer {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: calc(var(--radius) + 4px);
+  background: rgba(12, 18, 24, 0.72);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(14px);
+}
+
+.composer textarea {
+  width: 100%;
+  min-height: 88px;
+  resize: vertical;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--mercury-bright);
+  padding: 4px 2px;
+}
+
+.composer textarea::placeholder {
+  color: rgba(143, 163, 181, 0.75);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.actions button {
+  border: 1px solid var(--line);
+  background: var(--glass-strong);
+  color: var(--mercury-bright);
+  border-radius: 14px;
+  padding: 11px 14px;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+
+.actions button:active {
+  transform: scale(0.98);
+}
+
+.actions button.primary {
+  background: linear-gradient(135deg, #6eb5a4, #3d7a6d);
+  border-color: transparent;
+  color: #07110e;
+  font-weight: 600;
+  margin-left: auto;
+}
+
+.actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.status {
+  color: var(--mist);
+  font-size: 0.75rem;
+}
+
+.status.warn {
+  color: var(--danger);
+}
+
+.install-hint {
+  margin: 0;
+  color: var(--mist);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+@keyframes brandIn {
+  from {
+    opacity: 0;
+    letter-spacing: 0.08em;
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    letter-spacing: -0.03em;
+    filter: blur(0);
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes bubbleIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 480px) {
+  .brand-meta {
+    max-width: 42vw;
+  }
+
+  .actions button.primary {
+    width: 100%;
+    margin-left: 0;
+  }
+}
