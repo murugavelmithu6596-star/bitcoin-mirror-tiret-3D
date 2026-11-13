@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="fr-CH">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#142820" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Lois CH" />
+    <meta
+      name="description"
+      content="Consulter la législation fédérale suisse depuis 2000 (Fedlex RO/AS et RS) — optimisé iPhone."
+    />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Source+Sans+3:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <title>Lois suisses</title>
+  </head>
+  <body>
+    <div class="app">
+      <header class="top">
+        <h1 class="brand">Lois suisses</h1>
+        <p class="lede">
+          Droit fédéral depuis 2000 — Fedlex (RO/AS &amp; RS). Touchez une ligne pour ouvrir le texte officiel.
+        </p>
+        <p id="installHint" class="install-hint" hidden>
+          Sur iPhone : Safari → bouton Partager → <strong>Sur l’écran d’accueil</strong>.
+        </p>
+        <div class="controls">
+          <div class="search-wrap">
+            <label class="visually-hidden" for="q">Rechercher</label>
+            <input
+              id="q"
+              class="search"
+              type="search"
+              enterkeyhint="search"
+              autocomplete="off"
+              autocorrect="off"
+              autocapitalize="off"
+              spellcheck="false"
+              placeholder="Rechercher titre, RS, année…"
+            />
+            <button id="clear" class="clear-btn" type="button" aria-label="Effacer">×</button>
+          </div>
+          <div class="filters" role="group" aria-label="Filtrer par collection">
+            <button type="button" class="chip" data-filter="all" aria-pressed="true">Tout</button>
+            <button type="button" class="chip" data-filter="oc" aria-pressed="false">RO / AS</button>
+            <button type="button" class="chip" data-filter="rs" aria-pressed="false">RS</button>
+          </div>
+        </div>
+        <div class="meta-bar" id="metaBar" aria-live="polite">
+          Chargement…
+        </div>
+      </header>
+
+      <div id="status" class="status" role="status">Chargement des textes…</div>
+      <ul id="list" class="list" aria-label="Liste des lois"></ul>
+      <button id="more" class="load-more" type="button" hidden>Charger plus</button>
+
+      <footer class="footer">
+        Source :
+        <a href="https://www.fedlex.admin.ch/" rel="noopener noreferrer">Fedlex</a>
+        · Ceci n’est pas une publication officielle.
+      </footer>
+    </div>
+    <style>
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+    </style>
+    <script src="app.js" defer></script>
+  </body>
+</html>
