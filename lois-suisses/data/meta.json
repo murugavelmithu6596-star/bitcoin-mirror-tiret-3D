@@ -1,0 +1,17 @@
+{
+  "generatedAt": "2026-11-13T11:41:49Z",
+  "source": "Fedlex SPARQL https://fedlex.data.admin.ch/sparqlendpoint",
+  "scope": "Swiss federal legislation (RO/AS + RS) with document/entry date >= 2000",
+  "limits": [
+    "Fedlex covers federal law only; cantonal legislation is published on separate cantonal portals and is not included.",
+    "Full-text bodies are not downloaded; metadata + Fedlex links only.",
+    "Titles prefer French, fall back to German."
+  ],
+  "counts": {
+    "officialCompilationSince2000": 22023,
+    "classifiedCompilationSince2000": 4831,
+    "totalEntries": 26854,
+    "yearMin": 2000,
+    "yearMax": 2027
+  }
+}

@@ -1,0 +1,160 @@
+{
+  "generatedAt": "2026-11-13T11:41:49Z",
+  "source": "Fedlex SPARQL https://fedlex.data.admin.ch/sparqlendpoint",
+  "scope": "Swiss federal legislation (RO/AS + RS) with document/entry date >= 2000",
+  "limits": [
+    "Fedlex covers federal law only; cantonal legislation is published on separate cantonal portals and is not included.",
+    "Full-text bodies are not downloaded; metadata + Fedlex links only.",
+    "Titles prefer French, fall back to German."
+  ],
+  "counts": {
+    "officialCompilationSince2000": 22023,
+    "classifiedCompilationSince2000": 4831,
+    "totalEntries": 26854,
+    "yearMin": 2000,
+    "yearMax": 2027
+  },
+  "years": [
+    {
+      "year": 2027,
+      "count": 37,
+      "file": "data/years/2027.json"
+    },
+    {
+      "year": 2026,
+      "count": 625,
+      "file": "data/years/2026.json"
+    },
+    {
+      "year": 2025,
+      "count": 941,
+      "file": "data/years/2025.json"
+    },
+    {
+      "year": 2024,
+      "count": 929,
+      "file": "data/years/2024.json"
+    },
+    {
+      "year": 2023,
+      "count": 936,
+      "file": "data/years/2023.json"
+    },
+    {
+      "year": 2022,
+      "count": 1017,
+      "file": "data/years/2022.json"
+    },
+    {
+      "year": 2021,
+      "count": 1062,
+      "file": "data/years/2021.json"
+    },
+    {
+      "year": 2020,
+      "count": 1231,
+      "file": "data/years/2020.json"
+    },
+    {
+      "year": 2019,
+      "count": 931,
+      "file": "data/years/2019.json"
+    },
+    {
+      "year": 2018,
+      "count": 1010,
+      "file": "data/years/2018.json"
+    },
+    {
+      "year": 2017,
+      "count": 1009,
+      "file": "data/years/2017.json"
+    },
+    {
+      "year": 2016,
+      "count": 1095,
+      "file": "data/years/2016.json"
+    },
+    {
+      "year": 2015,
+      "count": 1088,
+      "file": "data/years/2015.json"
+    },
+    {
+      "year": 2014,
+      "count": 968,
+      "file": "data/years/2014.json"
+    },
+    {
+      "year": 2013,
+      "count": 1025,
+      "file": "data/years/2013.json"
+    },
+    {
+      "year": 2012,
+      "count": 1037,
+      "file": "data/years/2012.json"
+    },
+    {
+      "year": 2011,
+      "count": 1146,
+      "file": "data/years/2011.json"
+    },
+    {
+      "year": 2010,
+      "count": 1136,
+      "file": "data/years/2010.json"
+    },
+    {
+      "year": 2009,
+      "count": 999,
+      "file": "data/years/2009.json"
+    },
+    {
+      "year": 2008,
+      "count": 1144,
+      "file": "data/years/2008.json"
+    },
+    {
+      "year": 2007,
+      "count": 1170,
+      "file": "data/years/2007.json"
+    },
+    {
+      "year": 2006,
+      "count": 1035,
+      "file": "data/years/2006.json"
+    },
+    {
+      "year": 2005,
+      "count": 947,
+      "file": "data/years/2005.json"
+    },
+    {
+      "year": 2004,
+      "count": 1065,
+      "file": "data/years/2004.json"
+    },
+    {
+      "year": 2003,
+      "count": 922,
+      "file": "data/years/2003.json"
+    },
+    {
+      "year": 2002,
+      "count": 834,
+      "file": "data/years/2002.json"
+    },
+    {
+      "year": 2001,
+      "count": 752,
+      "file": "data/years/2001.json"
+    },
+    {
+      "year": 2000,
+      "count": 763,
+      "file": "data/years/2000.json"
+    }
+  ],
+  "appNote": "Mobile PWA lists federal RO/AS + RS entries since 2000 from Fedlex."
+}
