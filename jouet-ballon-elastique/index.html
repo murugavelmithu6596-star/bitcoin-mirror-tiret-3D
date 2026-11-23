@@ -9,8 +9,6 @@
       --bg: #e8f0f4;
       --ink: #2a3340;
       --accent: #eb4752;
-      --wood: #c28c52;
-      --latex: #f2e0b8;
     }
     * { box-sizing: border-box; }
     html, body { margin: 0; height: 100%; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--ink); }
@@ -18,33 +16,37 @@
     .hud {
       position: fixed; left: 1rem; bottom: 1rem; z-index: 2;
       background: rgba(255,255,255,.88); border: 1px solid #c5d0da;
-      padding: .75rem 1rem; border-radius: 8px; max-width: 18rem;
+      padding: .75rem 1rem; border-radius: 8px; max-width: 19rem;
       box-shadow: 0 4px 16px rgba(30,50,70,.08);
     }
     .hud h1 { margin: 0 0 .35rem; font-size: 1rem; font-weight: 650; }
     .hud p { margin: 0 0 .65rem; font-size: .82rem; line-height: 1.35; opacity: .85; }
+    .hud code { font-size: .78rem; }
     button {
       appearance: none; border: 0; background: var(--accent); color: #fff;
       font: inherit; font-weight: 600; font-size: .85rem;
       padding: .45rem .9rem; border-radius: 6px; cursor: pointer;
     }
     button:hover { filter: brightness(1.05); }
+    button:disabled { opacity: .55; cursor: wait; }
     .swatches { display: flex; gap: .4rem; margin-top: .55rem; flex-wrap: wrap; }
     .swatch { width: .7rem; height: .7rem; border-radius: 2px; border: 1px solid rgba(0,0,0,.12); }
+    #status { font-size: .75rem; opacity: .7; margin-top: .5rem; }
   </style>
 </head>
 <body>
   <canvas id="c"></canvas>
   <div class="hud">
     <h1>Ballon + élastique + paroi</h1>
-    <p>Simulation minimale : le ballon part vers le mur, rebondit une ou deux fois, l’élastique s’étire et le ramène.</p>
-    <button type="button" id="replay">Rejouer</button>
-    <div class="swatches" title="Couleurs suggérées">
+    <p>Modèle <code>models/ballon_elastique.obj</code> + simulation de rebond. Glisser pour orbit · molette pour zoom.</p>
+    <button type="button" id="replay" disabled>Chargement…</button>
+    <div class="swatches" title="Couleurs MTL">
       <span class="swatch" style="background:#eb4752" title="Ballon"></span>
       <span class="swatch" style="background:#f2e0b8" title="Élastique"></span>
       <span class="swatch" style="background:#c28c52" title="Base"></span>
       <span class="swatch" style="background:#9db0bf" title="Paroi"></span>
     </div>
+    <div id="status">Chargement du modèle 3D…</div>
   </div>
 
   <script type="importmap">
@@ -58,13 +60,20 @@
   <script type="module">
     import * as THREE from "three";
     import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+    import { MTLLoader } from "three/addons/loaders/MTLLoader.js";
+    import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
 
-    const BALL_R = 0.22;
+    // OBJ en mm, Z-up → scène Y-up, échelle 1/100
+    const SCALE = 0.01;
+    const BALL_R = 22 * SCALE;
     const REST_LEN = 1.15;
     const WALL_X = 1.55;
-    const ANCHOR = new THREE.Vector3(0, 0.12, 0);
+    const ANCHOR = new THREE.Vector3(0, 0.10, 0);
 
     const canvas = document.getElementById("c");
+    const statusEl = document.getElementById("status");
+    const replayBtn = document.getElementById("replay");
+
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     renderer.setSize(innerWidth, innerHeight);
@@ -74,20 +83,18 @@
     scene.background = new THREE.Color(0xe8f0f4);
 
     const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.05, 40);
-    // Vue de côté : on voit clairement l’impact sur la face intérieure du mur
     camera.position.set(-0.4, 1.5, 4.0);
 
     const controls = new OrbitControls(camera, canvas);
     controls.target.set(0.7, 0.7, 0);
     controls.enableDamping = true;
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-    const sun = new THREE.DirectionalLight(0xfff4e8, 1.05);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+    const sun = new THREE.DirectionalLight(0xfff4e8, 1.1);
     sun.position.set(2, 4, 3);
     sun.castShadow = true;
     scene.add(sun);
 
-    // Sol
     const floor = new THREE.Mesh(
       new THREE.PlaneGeometry(8, 8),
       new THREE.MeshStandardMaterial({ color: 0xd5e2ea, roughness: 0.95 })
@@ -96,79 +103,88 @@
     floor.receiveShadow = true;
     scene.add(floor);
 
-    // Paroi verticale (plaque mince) — face intérieure visible depuis la base
     const wall = new THREE.Mesh(
       new THREE.BoxGeometry(0.06, 2.4, 2.8),
-      new THREE.MeshStandardMaterial({ color: 0x9db0bf, roughness: 0.85, transparent: true, opacity: 0.78 })
+      new THREE.MeshStandardMaterial({
+        color: 0x9db0bf,
+        roughness: 0.85,
+        transparent: true,
+        opacity: 0.78,
+      })
     );
     wall.position.set(WALL_X + 0.03, 1.2, 0);
     wall.receiveShadow = true;
     scene.add(wall);
 
-    // Base (ancrage)
-    const base = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.18, 0.22, 0.1, 24),
-      new THREE.MeshStandardMaterial({ color: 0xc28c52, roughness: 0.55, metalness: 0.05 })
-    );
-    base.position.copy(ANCHOR);
-    base.castShadow = true;
-    scene.add(base);
+    /** @type {THREE.Object3D|null} */
+    let ball = null;
+    /** @type {THREE.Object3D|null} */
+    let elastic = null;
+    let elasticRestVisual = REST_LEN;
 
-    // Ballon
-    const ball = new THREE.Mesh(
-      new THREE.SphereGeometry(BALL_R, 32, 24),
-      new THREE.MeshStandardMaterial({ color: 0xeb4752, roughness: 0.45, metalness: 0.0 })
-    );
-    ball.castShadow = true;
-    scene.add(ball);
-
-    // Élastique (ligne simple)
-    const elasticGeo = new THREE.BufferGeometry().setFromPoints([ANCHOR.clone(), ANCHOR.clone()]);
-    const elastic = new THREE.Line(
-      elasticGeo,
-      new THREE.LineBasicMaterial({ color: 0xf2e0b8, linewidth: 2 })
-    );
-    scene.add(elastic);
-
-    // Tube élastique un peu plus visible
-    const elasticTube = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.018, 0.018, 1, 8),
-      new THREE.MeshStandardMaterial({ color: 0xf2e0b8, roughness: 0.6 })
-    );
-    scene.add(elasticTube);
-
-    function updateElastic(pos) {
-      const pts = elastic.geometry.attributes.position;
-      pts.setXYZ(0, ANCHOR.x, ANCHOR.y, ANCHOR.z);
-      pts.setXYZ(1, pos.x, pos.y, pos.z);
-      pts.needsUpdate = true;
-
-      const mid = ANCHOR.clone().add(pos).multiplyScalar(0.5);
-      const dir = pos.clone().sub(ANCHOR);
-      const len = dir.length();
-      elasticTube.position.copy(mid);
-      elasticTube.scale.set(1, len, 1);
-      elasticTube.quaternion.setFromUnitVectors(
-        new THREE.Vector3(0, 1, 0),
-        dir.clone().normalize()
-      );
-    }
-
-    // Physique minimale
     const state = {
-      pos: new THREE.Vector3(),
-      vel: new THREE.Vector3(),
+      ready: false,
       bouncing: true,
       bounceCount: 0,
       maxBounces: 2,
+      pos: new THREE.Vector3(),
+      vel: new THREE.Vector3(),
     };
 
-    const K = 18;          // raideur élastique
-    const DAMP = 0.35;     // amortissement
-    const REST = 0.72;     // coefficient de restitution mur
+    const K = 18;
+    const DAMP = 0.35;
+    const REST = 0.72;
     const GRAV = -2.2;
 
+    function findNamed(root, name) {
+      let found = null;
+      root.traverse((o) => {
+        if (o.name === name) found = o;
+      });
+      return found;
+    }
+
+    function enableShadows(root) {
+      root.traverse((c) => {
+        if (c.isMesh) {
+          c.castShadow = true;
+          c.receiveShadow = true;
+          const mats = Array.isArray(c.material) ? c.material : [c.material];
+          for (const m of mats) {
+            if (m) m.side = THREE.DoubleSide;
+          }
+        }
+      });
+    }
+
+    /** Détache un objet du root et le place sous un pivot centré sur sa bbox. */
+    function pivotAroundCenter(object) {
+      object.updateMatrixWorld(true);
+      const center = new THREE.Box3().setFromObject(object).getCenter(new THREE.Vector3());
+      const size = new THREE.Box3().setFromObject(object).getSize(new THREE.Vector3());
+      const pivot = new THREE.Group();
+      pivot.name = object.name + "Pivot";
+      pivot.position.copy(center);
+      scene.add(pivot);
+      pivot.attach(object); // conserve le transform monde
+      return { pivot, size };
+    }
+
+    function updateElastic(pos) {
+      if (!elastic) return;
+      const mid = ANCHOR.clone().add(pos).multiplyScalar(0.5);
+      const dir = pos.clone().sub(ANCHOR);
+      const len = Math.max(dir.length(), 0.01);
+      elastic.position.copy(mid);
+      elastic.scale.set(1, len / elasticRestVisual, 1);
+      elastic.quaternion.setFromUnitVectors(
+        new THREE.Vector3(0, 1, 0),
+        dir.normalize()
+      );
+    }
+
     function reset() {
+      if (!state.ready || !ball) return;
       state.pos.set(0.35, 0.95, 0.15);
       state.vel.set(2.8, 0.4, 0.05);
       state.bounceCount = 0;
@@ -178,39 +194,30 @@
     }
 
     function step(dt) {
-      if (!state.bouncing) return;
+      if (!state.ready || !state.bouncing || !ball) return;
       dt = Math.min(dt, 1 / 30);
 
-      // Force élastique (Hooke) vers l’ancrage
       const toAnchor = ANCHOR.clone().sub(state.pos);
       const dist = toAnchor.length();
-      const stretch = dist - REST_LEN;
-      const dir = toAnchor.multiplyScalar(1 / dist);
-      const force = dir.multiplyScalar(K * stretch);
+      const dir = toAnchor.multiplyScalar(1 / Math.max(dist, 1e-6));
+      const force = dir.multiplyScalar(K * (dist - REST_LEN));
       force.y += GRAV;
 
       state.vel.addScaledVector(force, dt);
       state.vel.multiplyScalar(1 - DAMP * dt);
       state.pos.addScaledVector(state.vel, dt);
 
-      // Collision plan vertical x = WALL_X
       if (state.pos.x + BALL_R > WALL_X && state.vel.x > 0) {
         state.pos.x = WALL_X - BALL_R;
         state.vel.x *= -REST;
         state.bounceCount += 1;
-        if (state.bounceCount >= state.maxBounces) {
-          // après 2 rebonds : laisser l’élastique ramener sans nouveau rebond mur
-          if (state.vel.x > 0) state.vel.x = 0;
-        }
       }
 
-      // Sol
       if (state.pos.y < BALL_R) {
         state.pos.y = BALL_R;
         state.vel.y *= -0.35;
       }
 
-      // Arrêt quand presque au repos près de la longueur au repos
       if (
         state.bounceCount >= 1 &&
         state.vel.length() < 0.12 &&
@@ -224,8 +231,66 @@
       updateElastic(state.pos);
     }
 
-    document.getElementById("replay").addEventListener("click", reset);
-    reset();
+    replayBtn.addEventListener("click", reset);
+
+    const mtlLoader = new MTLLoader();
+    mtlLoader.setPath("models/");
+    mtlLoader.load(
+      "ballon_elastique.mtl",
+      (materials) => {
+        materials.preload();
+        const objLoader = new OBJLoader();
+        objLoader.setMaterials(materials);
+        objLoader.setPath("models/");
+        objLoader.load(
+          "ballon_elastique.obj",
+          (root) => {
+            root.scale.setScalar(SCALE);
+            root.rotation.x = -Math.PI / 2;
+            scene.add(root);
+            root.updateMatrixWorld(true);
+            enableShadows(root);
+
+            const baseObj = findNamed(root, "base");
+            const ballObj = findNamed(root, "ballon");
+            const elasticObj = findNamed(root, "elastique");
+
+            if (!baseObj || !ballObj || !elasticObj) {
+              statusEl.textContent = "Objets base / ballon / elastique introuvables.";
+              return;
+            }
+
+            const ballParts = pivotAroundCenter(ballObj);
+            ball = ballParts.pivot;
+
+            const elParts = pivotAroundCenter(elasticObj);
+            elastic = elParts.pivot;
+            // Après conversion Z→Y, l’axe long est Y
+            elasticRestVisual = Math.max(elParts.size.y, 0.01);
+
+            state.ready = true;
+            replayBtn.disabled = false;
+            replayBtn.textContent = "Rejouer";
+            statusEl.textContent = "Modèle OBJ intégré — prêt.";
+            reset();
+          },
+          (xhr) => {
+            if (xhr.total) {
+              statusEl.textContent = `OBJ ${Math.round((xhr.loaded / xhr.total) * 100)} %`;
+            }
+          },
+          (err) => {
+            console.error(err);
+            statusEl.textContent = "Échec OBJ — lancez un serveur HTTP dans ce dossier.";
+          }
+        );
+      },
+      undefined,
+      (err) => {
+        console.error(err);
+        statusEl.textContent = "Échec MTL.";
+      }
+    );
 
     let last = performance.now();
     function frame(now) {
