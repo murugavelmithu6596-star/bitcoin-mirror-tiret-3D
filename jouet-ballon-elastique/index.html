@@ -38,7 +38,7 @@
   <canvas id="c"></canvas>
   <div class="hud">
     <h1>Ballon + élastique + paroi</h1>
-    <p>Modèle <code>models/ballon_elastique.obj</code> + simulation de rebond. Glisser pour orbit · molette pour zoom.</p>
+    <p>Modèle <code>models/ballon_elastique.obj</code> (Y-up). Glisser = orbit · molette = zoom.</p>
     <button type="button" id="replay" disabled>Chargement…</button>
     <div class="swatches" title="Couleurs MTL">
       <span class="swatch" style="background:#eb4752" title="Ballon"></span>
@@ -63,12 +63,19 @@
     import { MTLLoader } from "three/addons/loaders/MTLLoader.js";
     import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
 
-    // OBJ en mm, Z-up → scène Y-up, échelle 1/100
-    const SCALE = 0.01;
-    const BALL_R = 22 * SCALE;
-    const REST_LEN = 1.15;
-    const WALL_X = 1.55;
-    const ANCHOR = new THREE.Vector3(0, 0.10, 0);
+    /**
+     * OBJ source : millimètres, Z-up.
+     * Scène Three.js : Y-up.
+     * Conversion : scale mm→unités scène, puis rotation X −90°.
+     * Échelle choisie pour un jouet lisible face à la paroi (~ballon Ø 4–5 cm à l’écran).
+     */
+    const SCALE = 0.018; // 18 mm → 0.324 unité de rayon ballon
+    const BALL_R_MM = 22;
+    const BALL_R = BALL_R_MM * SCALE;
+    const BASE_TOP_Y = 10 * SCALE; // sommet base (z=10 mm → y)
+    const ANCHOR = new THREE.Vector3(0, BASE_TOP_Y, 0);
+    const REST_LEN = (120 - 10) * SCALE; // ancrage → centre ballon au repos OBJ
+    const WALL_X = 1.35; // paroi juste après la zone de jeu du ballon
 
     const canvas = document.getElementById("c");
     const statusEl = document.getElementById("status");
@@ -82,37 +89,50 @@
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xe8f0f4);
 
-    const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.05, 40);
-    camera.position.set(-0.4, 1.5, 4.0);
+    const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.05, 50);
+    // Cadrage initial : jouet + paroi bien visibles dès l’ouverture
+    camera.position.set(0.55, 1.15, 3.35);
 
     const controls = new OrbitControls(camera, canvas);
-    controls.target.set(0.7, 0.7, 0);
+    controls.target.set(0.55, 0.75, 0);
     controls.enableDamping = true;
+    controls.minDistance = 1.2;
+    controls.maxDistance = 8;
+    controls.maxPolarAngle = Math.PI * 0.49;
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.75));
-    const sun = new THREE.DirectionalLight(0xfff4e8, 1.1);
-    sun.position.set(2, 4, 3);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+    const sun = new THREE.DirectionalLight(0xfff4e8, 1.15);
+    sun.position.set(1.5, 3.5, 2.5);
     sun.castShadow = true;
+    sun.shadow.mapSize.set(1024, 1024);
     scene.add(sun);
+    const fill = new THREE.DirectionalLight(0xdce9f5, 0.35);
+    fill.position.set(-2, 1.5, -1);
+    scene.add(fill);
 
     const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(8, 8),
+      new THREE.CircleGeometry(4.5, 48),
       new THREE.MeshStandardMaterial({ color: 0xd5e2ea, roughness: 0.95 })
     );
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     scene.add(floor);
 
+    // Repère Y-up discret (aide visuelle légère)
+    const axes = new THREE.AxesHelper(0.35);
+    axes.position.set(-0.55, 0.02, -0.55);
+    scene.add(axes);
+
     const wall = new THREE.Mesh(
-      new THREE.BoxGeometry(0.06, 2.4, 2.8),
+      new THREE.BoxGeometry(0.05, 2.1, 2.4),
       new THREE.MeshStandardMaterial({
         color: 0x9db0bf,
         roughness: 0.85,
         transparent: true,
-        opacity: 0.78,
+        opacity: 0.72,
       })
     );
-    wall.position.set(WALL_X + 0.03, 1.2, 0);
+    wall.position.set(WALL_X + 0.025, 1.05, 0);
     wall.receiveShadow = true;
     scene.add(wall);
 
@@ -131,10 +151,10 @@
       vel: new THREE.Vector3(),
     };
 
-    const K = 18;
-    const DAMP = 0.35;
-    const REST = 0.72;
-    const GRAV = -2.2;
+    const K = 22;
+    const DAMP = 0.4;
+    const REST = 0.7;
+    const GRAV = -2.4;
 
     function findNamed(root, name) {
       let found = null;
@@ -146,28 +166,42 @@
 
     function enableShadows(root) {
       root.traverse((c) => {
-        if (c.isMesh) {
-          c.castShadow = true;
-          c.receiveShadow = true;
-          const mats = Array.isArray(c.material) ? c.material : [c.material];
-          for (const m of mats) {
-            if (m) m.side = THREE.DoubleSide;
-          }
+        if (!c.isMesh) return;
+        c.castShadow = true;
+        c.receiveShadow = true;
+        const mats = Array.isArray(c.material) ? c.material : [c.material];
+        for (const m of mats) {
+          if (!m) continue;
+          m.side = THREE.DoubleSide;
+          // Lisibilité jouet sous lumières scène
+          if ("specular" in m) m.specular = new THREE.Color(0x333333);
         }
       });
     }
 
-    /** Détache un objet du root et le place sous un pivot centré sur sa bbox. */
+    /** Pivot centré sur la bbox monde (pour animer position / stretch). */
     function pivotAroundCenter(object) {
       object.updateMatrixWorld(true);
-      const center = new THREE.Box3().setFromObject(object).getCenter(new THREE.Vector3());
-      const size = new THREE.Box3().setFromObject(object).getSize(new THREE.Vector3());
+      const box = new THREE.Box3().setFromObject(object);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
       const pivot = new THREE.Group();
-      pivot.name = object.name + "Pivot";
+      pivot.name = `${object.name}Pivot`;
       pivot.position.copy(center);
       scene.add(pivot);
-      pivot.attach(object); // conserve le transform monde
-      return { pivot, size };
+      pivot.attach(object);
+      return { pivot, size, center };
+    }
+
+    function frameToyAndWall() {
+      // Vise le milieu de la zone base → paroi, hauteur ballon
+      const focus = new THREE.Vector3(WALL_X * 0.42, 0.75, 0);
+      controls.target.copy(focus);
+      camera.position.set(focus.x - 0.15, 1.2, 3.2);
+      camera.near = 0.05;
+      camera.far = 40;
+      camera.updateProjectionMatrix();
+      controls.update();
     }
 
     function updateElastic(pos) {
@@ -185,8 +219,9 @@
 
     function reset() {
       if (!state.ready || !ball) return;
-      state.pos.set(0.35, 0.95, 0.15);
-      state.vel.set(2.8, 0.4, 0.05);
+      // Départ visible entre base et paroi, vers le mur
+      state.pos.set(0.45, 0.95, 0.08);
+      state.vel.set(2.6, 0.35, 0.02);
       state.bounceCount = 0;
       state.bouncing = true;
       ball.position.copy(state.pos);
@@ -221,7 +256,7 @@
       if (
         state.bounceCount >= 1 &&
         state.vel.length() < 0.12 &&
-        Math.abs(dist - REST_LEN) < 0.08
+        Math.abs(dist - REST_LEN) < 0.1
       ) {
         state.bouncing = false;
         state.vel.set(0, 0, 0);
@@ -231,7 +266,13 @@
       updateElastic(state.pos);
     }
 
-    replayBtn.addEventListener("click", reset);
+    replayBtn.addEventListener("click", () => {
+      frameToyAndWall();
+      reset();
+    });
+
+    // Cadrage dès le premier frame (avant chargement OBJ)
+    frameToyAndWall();
 
     const mtlLoader = new MTLLoader();
     mtlLoader.setPath("models/");
@@ -245,8 +286,10 @@
         objLoader.load(
           "ballon_elastique.obj",
           (root) => {
+            // mm Z-up → scène Y-up
             root.scale.setScalar(SCALE);
             root.rotation.x = -Math.PI / 2;
+            root.position.set(0, 0, 0);
             scene.add(root);
             root.updateMatrixWorld(true);
             enableShadows(root);
@@ -260,18 +303,22 @@
               return;
             }
 
+            // Base reste au sol (origine), Y-up
+            baseObj.position.y = 0;
+
             const ballParts = pivotAroundCenter(ballObj);
             ball = ballParts.pivot;
 
             const elParts = pivotAroundCenter(elasticObj);
             elastic = elParts.pivot;
-            // Après conversion Z→Y, l’axe long est Y
-            elasticRestVisual = Math.max(elParts.size.y, 0.01);
+            // Axe long après rot −90°X = Y monde
+            elasticRestVisual = Math.max(elParts.size.y, REST_LEN * 0.5);
 
+            frameToyAndWall();
             state.ready = true;
             replayBtn.disabled = false;
             replayBtn.textContent = "Rejouer";
-            statusEl.textContent = "Modèle OBJ intégré — prêt.";
+            statusEl.textContent = "Prêt — ballon, élastique et paroi cadrés.";
             reset();
           },
           (xhr) => {
@@ -281,7 +328,7 @@
           },
           (err) => {
             console.error(err);
-            statusEl.textContent = "Échec OBJ — lancez un serveur HTTP dans ce dossier.";
+            statusEl.textContent = "Échec OBJ — servez ce dossier en HTTP.";
           }
         );
       },
