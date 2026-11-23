@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Cache-Control" content="no-cache" />
+  <title>Lance-pierres — ballon taille main</title>
+  <style>
+    :root {
+      --bg: #eaf1f5;
+      --ink: #243040;
+      --accent: #e94b52;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--ink); }
+    #c { display: block; width: 100%; height: 100%; touch-action: none; }
+    .hud {
+      position: fixed; left: 1rem; bottom: 1rem; z-index: 2;
+      background: rgba(255,255,255,.92); border: 1px solid #c9d5df;
+      padding: .85rem 1rem; border-radius: 10px; width: min(20rem, calc(100vw - 2rem));
+      box-shadow: 0 6px 20px rgba(30,50,70,.1);
+    }
+    .hud h1 { margin: 0 0 .35rem; font-size: 1.02rem; font-weight: 700; }
+    .steps { display: flex; gap: .35rem; margin: 0 0 .55rem; }
+    .steps span {
+      flex: 1; text-align: center; font-size: .65rem; font-weight: 650;
+      padding: .32rem .1rem; border-radius: 6px; background: #eef3f7; color: #6a7888;
+    }
+    .steps span.on { background: var(--accent); color: #fff; }
+    .data {
+      margin: 0 0 .55rem; font-size: .74rem; line-height: 1.4;
+      padding: .45rem .55rem; border-radius: 6px; background: #f4f8fb;
+    }
+    .hint { margin: 0 0 .55rem; font-size: .72rem; opacity: .75; line-height: 1.35; }
+    button {
+      appearance: none; border: 0; width: 100%;
+      background: var(--accent); color: #fff;
+      font: inherit; font-weight: 700; font-size: .88rem;
+      padding: .5rem .85rem; border-radius: 8px; cursor: pointer;
+    }
+    #status { margin-top: .5rem; font-size: .74rem; opacity: .75; text-align: center; }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div class="hud">
+    <h1>Lance-pierres</h1>
+    <div class="steps" id="steps">
+      <span data-s="aim">1. Viser</span>
+      <span data-s="pull">2. Tirer</span>
+      <span data-s="fly">3. Paroi→main</span>
+    </div>
+    <div class="data">
+      Ballon <strong>taille main</strong> · élastique fin<br />
+      Tire avec le <strong>pouce</strong> (glisser en arrière), vise, lâche
+    </div>
+    <p class="hint">Glisse sur le ballon vers l’arrière pour tendre, relâche pour tirer vers la paroi. Ou <em>Rejouer</em> pour la démo auto.</p>
+    <button type="button" id="replay">Rejouer (démo)</button>
+    <div id="status">…</div>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+    const HAND_R = 0.36;
+    const BALL_R = 0.40;
+    const ELASTIC_R = 0.055;
+    const REST_LEN = 0.85; // au repos : ballon presque dans la main
+    const WALL_X = 14;
+    const MAX_PULL = 5.5; // étirement max (cm scène)
+    const LAUNCH_GAIN = 8.5; // vitesse ∝ étirement
+
+    // Direction de visée par défaut : vers la paroi (+X), légèrement haut
+    const DEFAULT_AIM = new THREE.Vector3(1, 0.18, 0).normalize();
+
+    const statusEl = document.getElementById("status");
+    const stepEls = [...document.querySelectorAll("#steps span")];
+    function setStepUI(name) {
+      stepEls.forEach((el) => el.classList.toggle("on", el.dataset.s === name));
+    }
+
+    const canvas = document.getElementById("c");
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.shadowMap.enabled = true;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xeaf1f5);
+
+    const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.5, 200);
+    camera.position.set(2, 10, 24);
+    const controls = new OrbitControls(camera, canvas);
+    controls.target.set(4, 5, 0);
+    controls.enableDamping = true;
+    controls.minDistance = 12;
+    controls.maxDistance = 50;
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+    const sun = new THREE.DirectionalLight(0xfff5ea, 1.05);
+    sun.position.set(8, 22, 12);
+    sun.castShadow = true;
+    scene.add(sun);
+
+    const floor = new THREE.Mesh(
+      new THREE.CircleGeometry(36, 48),
+      new THREE.MeshStandardMaterial({ color: 0xd7e3ea, roughness: 0.95 })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    const wall = new THREE.Mesh(
+      new THREE.BoxGeometry(0.35, 20, 18),
+      new THREE.MeshStandardMaterial({ color: 0x9db0bf, transparent: true, opacity: 0.68, roughness: 0.85 })
+    );
+    wall.position.set(WALL_X + 0.2, 10, 0);
+    scene.add(wall);
+
+    const ball = new THREE.Mesh(
+      new THREE.SphereGeometry(BALL_R, 24, 18),
+      new THREE.MeshStandardMaterial({ color: 0xe94b52, roughness: 0.4 })
+    );
+    ball.castShadow = true;
+    scene.add(ball);
+
+    const elastic = new THREE.Mesh(
+      new THREE.CylinderGeometry(ELASTIC_R, ELASTIC_R, 1, 8),
+      new THREE.MeshStandardMaterial({ color: 0xebd9b8, roughness: 0.55 })
+    );
+    scene.add(elastic);
+
+    // Flèche de visée (direction de lâcher)
+    const aimArrow = new THREE.ArrowHelper(
+      DEFAULT_AIM.clone(),
+      new THREE.Vector3(),
+      3.2,
+      0x2a6f97,
+      0.45,
+      0.35
+    );
+    aimArrow.visible = false;
+    scene.add(aimArrow);
+
+    function updateElastic(anchor, tip) {
+      const mid = anchor.clone().add(tip).multiplyScalar(0.5);
+      const dir = tip.clone().sub(anchor);
+      const len = Math.max(dir.length(), 0.05);
+      elastic.position.copy(mid);
+      elastic.scale.set(1, len, 1);
+      elastic.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+    }
+
+    function makePerson() {
+      const g = new THREE.Group();
+      const skin = new THREE.MeshStandardMaterial({ color: 0xe8b89a, roughness: 0.7 });
+      const cloth = new THREE.MeshStandardMaterial({ color: 0x5a7d9a, roughness: 0.65 });
+      const pants = new THREE.MeshStandardMaterial({ color: 0x3a4d5e, roughness: 0.7 });
+
+      const torso = new THREE.Mesh(new THREE.CapsuleGeometry(1.05, 2.2, 4, 8), cloth);
+      torso.position.y = 5.0;
+      torso.castShadow = true;
+      g.add(torso);
+
+      const head = new THREE.Mesh(new THREE.SphereGeometry(1.0, 14, 12), skin);
+      head.position.y = 7.3;
+      g.add(head);
+
+      const armR = new THREE.Group();
+      armR.position.set(1.3, 5.9, 0);
+      const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.26, 1.45, 3, 6), skin);
+      upper.position.y = -0.9;
+      armR.add(upper);
+      const hand = new THREE.Mesh(new THREE.SphereGeometry(HAND_R, 12, 10), skin);
+      hand.position.y = -1.9;
+      armR.add(hand);
+      // Pouce stylisé
+      const thumb = new THREE.Mesh(
+        new THREE.CapsuleGeometry(0.09, 0.28, 2, 6),
+        skin
+      );
+      thumb.position.set(0.28, -1.75, 0.22);
+      thumb.rotation.z = -0.6;
+      thumb.rotation.x = 0.4;
+      armR.add(thumb);
+      g.add(armR);
+
+      const armL = new THREE.Mesh(new THREE.CapsuleGeometry(0.26, 1.45, 3, 6), skin);
+      armL.position.set(-1.3, 5.0, 0);
+      g.add(armL);
+
+      const legL = new THREE.Mesh(new THREE.CapsuleGeometry(0.34, 2.1, 3, 6), pants);
+      legL.position.set(-0.5, 1.9, 0);
+      g.add(legL);
+      const legR = legL.clone();
+      legR.position.x = 0.5;
+      g.add(legR);
+
+      g.userData = { armR, hand, thumb };
+      return g;
+    }
+
+    const person = makePerson();
+    person.position.set(-4.5, 0, 1.5);
+    person.rotation.y = 0.35;
+    scene.add(person);
+
+    function setArm(amount) {
+      const arm = person.userData.armR;
+      arm.rotation.x = -0.2 - amount * 1.15;
+      arm.rotation.z = -0.12 - amount * 0.2;
+      arm.rotation.y = amount * 0.3;
+      // Pouce presse le ballon
+      person.userData.thumb.rotation.z = -0.6 - amount * 0.35;
+    }
+
+    function handWorld() {
+      const p = new THREE.Vector3();
+      person.userData.hand.getWorldPosition(p);
+      return p;
+    }
+
+    const state = {
+      mode: "idle", // idle | dragging | demo | flying | done
+      demoPhase: "aim",
+      t: 0,
+      pos: new THREE.Vector3(),
+      vel: new THREE.Vector3(),
+      aim: DEFAULT_AIM.clone(),
+      pull: 0, // 0..MAX_PULL
+      hitWall: false,
+      bounceCount: 0,
+    };
+
+    const K = 14; // rappel vers la main après le vol
+    const DAMP = 0.48;
+    const REST = 0.7;
+    const GRAV = -14;
+
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    const dragPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+    const dragHit = new THREE.Vector3();
+
+    function restBallPos() {
+      return handWorld().add(new THREE.Vector3(0.55, 0.08, 0));
+    }
+
+    function syncVisuals() {
+      const anchor = handWorld();
+      ball.position.copy(state.pos);
+      updateElastic(anchor, state.pos);
+
+      // Visée = opposé à la direction de tirage (lance-pierres)
+      if (state.mode === "dragging" || (state.mode === "demo" && state.demoPhase === "pull")) {
+        const pullVec = state.pos.clone().sub(anchor);
+        if (pullVec.length() > 0.15) {
+          state.aim.copy(pullVec).multiplyScalar(-1).normalize();
+          // Garder une composante vers +X (paroi) si presque vertical
+          if (state.aim.x < 0.15) {
+            state.aim.x = 0.15;
+            state.aim.normalize();
+          }
+        }
+        aimArrow.visible = true;
+        aimArrow.position.copy(state.pos);
+        aimArrow.setDirection(state.aim);
+        aimArrow.setLength(2.2 + state.pull * 0.35, 0.4, 0.3);
+      } else {
+        aimArrow.visible = false;
+      }
+    }
+
+    /** Lâcher d’un coup : vitesse = gain × étirement, direction = visée. */
+    function releaseShot() {
+      const stretch = Math.max(state.pull, state.pos.distanceTo(handWorld()) - REST_LEN);
+      const power = Math.min(stretch, MAX_PULL);
+      state.vel.copy(state.aim).multiplyScalar(LAUNCH_GAIN * power);
+      // Petit coup sec vertical selon la visée
+      state.vel.y += 1.5 * Math.max(0, state.aim.y);
+      state.mode = "flying";
+      state.t = 0;
+      state.hitWall = false;
+      state.bounceCount = 0;
+      setStepUI("fly");
+      setArm(0.15);
+      statusEl.textContent = "Lâché ! Direction de visée…";
+      aimArrow.visible = false;
+      controls.enabled = true;
+    }
+
+    function resetIdle() {
+      state.mode = "idle";
+      state.t = 0;
+      state.pull = 0;
+      state.vel.set(0, 0, 0);
+      state.aim.copy(DEFAULT_AIM);
+      state.hitWall = false;
+      person.position.set(-4.5, 0, 1.5);
+      setArm(0.05);
+      setStepUI("aim");
+      state.pos.copy(restBallPos());
+      statusEl.textContent = "Glisse le ballon en arrière (pouce) pour viser";
+      syncVisuals();
+    }
+
+    function startDemo() {
+      state.mode = "demo";
+      state.demoPhase = "aim";
+      state.t = 0;
+      state.pull = 0;
+      state.vel.set(0, 0, 0);
+      state.aim.copy(DEFAULT_AIM);
+      state.hitWall = false;
+      person.position.set(-4.5, 0, 1.5);
+      setArm(0);
+      setStepUI("aim");
+      state.pos.copy(restBallPos());
+      statusEl.textContent = "Démo : il vise la paroi…";
+      syncVisuals();
+    }
+
+    function stepDemo(dt) {
+      state.t += dt;
+      const t = state.t;
+      const anchor = handWorld();
+
+      if (state.demoPhase === "aim") {
+        setStepUI("aim");
+        setArm(0.2);
+        state.pos.copy(restBallPos());
+        // Oriente légèrement le corps / bras vers la paroi
+        person.rotation.y = 0.25 + Math.min(t, 0.6) * 0.2;
+        statusEl.textContent = "Il vise…";
+        if (t > 0.7) {
+          state.demoPhase = "pull";
+          state.t = 0;
+          setStepUI("pull");
+        }
+      } else if (state.demoPhase === "pull") {
+        // Tire avec le pouce : ballon part à l’opposé de la visée
+        const u = Math.min(state.t / 1.0, 1);
+        const pullDist = 1.2 + u * (MAX_PULL - 1.2);
+        state.pull = pullDist;
+        setArm(0.55 + u * 0.45);
+        // Position = main − aim * pull (tirage arrière)
+        state.pos.copy(anchor).addScaledVector(state.aim, -pullDist);
+        person.position.x = -4.5 - u * 0.6;
+        statusEl.textContent = "Pouce : il tend l’élastique…";
+        if (u >= 1) {
+          releaseShot();
+        }
+      }
+      syncVisuals();
+    }
+
+    function stepFlying(dt) {
+      state.t += dt;
+      const anchor = handWorld();
+
+      // Pendant le vol : rappel progressif vers la main (élastique)
+      const toA = anchor.clone().sub(state.pos);
+      const dist = toA.length();
+      const dir = toA.multiplyScalar(1 / Math.max(dist, 1e-6));
+      // Pendant la phase aller (avant mur), rappel plus doux ; après mur, plus fort
+      const kNow = state.hitWall ? K : K * 0.35;
+      const restNow = state.hitWall ? REST_LEN : REST_LEN + 2.5;
+      const force = dir.multiplyScalar(kNow * (dist - restNow));
+      force.y += GRAV;
+
+      state.vel.addScaledVector(force, dt);
+      state.vel.multiplyScalar(1 - DAMP * dt);
+      state.pos.addScaledVector(state.vel, dt);
+
+      // Rebond paroi
+      if (state.pos.x + BALL_R > WALL_X && state.vel.x > 0) {
+        state.pos.x = WALL_X - BALL_R;
+        state.vel.x *= -REST;
+        state.bounceCount += 1;
+        state.hitWall = true;
+        statusEl.textContent = "Rebond paroi → retour main…";
+      }
+      if (state.pos.y < BALL_R) {
+        state.pos.y = BALL_R;
+        state.vel.y *= -0.25;
+      }
+
+      const nearHand = state.pos.distanceTo(anchor) < 1.2;
+      if (state.hitWall && nearHand && state.vel.length() < 3) {
+        state.mode = "done";
+        state.vel.set(0, 0, 0);
+        state.pos.copy(restBallPos());
+        setArm(0.05);
+        statusEl.textContent = "De retour dans la main";
+      }
+
+      // Si la visée a manqué le mur, le rappel ramène quand même
+      if (!state.hitWall && state.t > 3.2) {
+        statusEl.textContent = "Retour vers la main…";
+      }
+
+      setArm(0.12);
+      syncVisuals();
+    }
+
+    function step(dt) {
+      if (state.mode === "demo") stepDemo(dt);
+      else if (state.mode === "flying") stepFlying(dt);
+      else if (state.mode === "dragging") {
+        // position déjà mise à jour par les events
+        syncVisuals();
+      } else if (state.mode === "done" || state.mode === "idle") {
+        if (state.mode === "idle") {
+          state.pos.lerp(restBallPos(), 0.15);
+        }
+        syncVisuals();
+      }
+    }
+
+    // ——— Interaction lance-pierres (drag) ———
+    function setPointer(e) {
+      const r = canvas.getBoundingClientRect();
+      const x = (e.clientX ?? e.touches?.[0]?.clientX) - r.left;
+      const y = (e.clientY ?? e.touches?.[0]?.clientY) - r.top;
+      pointer.x = (x / r.width) * 2 - 1;
+      pointer.y = -(y / r.height) * 2 + 1;
+    }
+
+    function onPointerDown(e) {
+      if (state.mode === "flying" || state.mode === "demo") return;
+      setPointer(e);
+      raycaster.setFromCamera(pointer, camera);
+      const hits = raycaster.intersectObject(ball);
+      if (!hits.length) return;
+      e.preventDefault();
+      controls.enabled = false;
+      state.mode = "dragging";
+      setStepUI("pull");
+      statusEl.textContent = "Tire en arrière avec le pouce…";
+      dragPlane.setFromNormalAndCoplanarPoint(
+        camera.getWorldDirection(new THREE.Vector3()).multiplyScalar(-1),
+        ball.position
+      );
+    }
+
+    function onPointerMove(e) {
+      if (state.mode !== "dragging") return;
+      setPointer(e);
+      raycaster.setFromCamera(pointer, camera);
+      if (!raycaster.ray.intersectPlane(dragPlane, dragHit)) return;
+
+      const anchor = handWorld();
+      // Limiter le tirage autour de la main
+      let offset = dragHit.clone().sub(anchor);
+      if (offset.length() > MAX_PULL) offset.setLength(MAX_PULL);
+      // Empêcher de tirer vers la paroi (il faut tirer en arrière)
+      if (offset.x > 0.3) offset.x = 0.3;
+
+      state.pos.copy(anchor).add(offset);
+      state.pull = offset.length();
+      const amount = Math.min(1, state.pull / MAX_PULL);
+      setArm(0.4 + amount * 0.6);
+      setStepUI("pull");
+      statusEl.textContent = `Tension ${(amount * 100) | 0} % — vise puis lâche`;
+    }
+
+    function onPointerUp() {
+      if (state.mode !== "dragging") return;
+      if (state.pull < 0.8) {
+        // Trop peu : annuler
+        controls.enabled = true;
+        resetIdle();
+        statusEl.textContent = "Tire plus fort pour lancer";
+        return;
+      }
+      releaseShot();
+    }
+
+    canvas.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerUp);
+
+    document.getElementById("replay").addEventListener("click", startDemo);
+    startDemo();
+
+    let last = performance.now();
+    function frame(now) {
+      const dt = Math.min((now - last) / 1000, 1 / 30);
+      last = now;
+      step(dt);
+      controls.update();
+      renderer.render(scene, camera);
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+
+    addEventListener("resize", () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+  </script>
+</body>
+</html>
