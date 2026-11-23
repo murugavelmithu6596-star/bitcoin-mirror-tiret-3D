@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Tirer & rebondir — ballon 3 cm</title>
+  <meta http-equiv="Cache-Control" content="no-cache" />
+  <title>Tirer → paroi → main — ballon taille main</title>
   <style>
     :root {
       --bg: #eaf1f5;
@@ -19,15 +20,15 @@
       padding: .85rem 1rem; border-radius: 10px; width: min(20rem, calc(100vw - 2rem));
       box-shadow: 0 6px 20px rgba(30,50,70,.1);
     }
-    .hud h1 { margin: 0 0 .4rem; font-size: 1.05rem; font-weight: 700; }
-    .steps { display: flex; gap: .4rem; margin: 0 0 .65rem; }
+    .hud h1 { margin: 0 0 .4rem; font-size: 1.02rem; font-weight: 700; }
+    .steps { display: flex; gap: .35rem; margin: 0 0 .65rem; }
     .steps span {
-      flex: 1; text-align: center; font-size: .72rem; font-weight: 650;
-      padding: .35rem .2rem; border-radius: 6px; background: #eef3f7; color: #6a7888;
+      flex: 1; text-align: center; font-size: .68rem; font-weight: 650;
+      padding: .35rem .15rem; border-radius: 6px; background: #eef3f7; color: #6a7888;
     }
     .steps span.on { background: var(--accent); color: #fff; }
     .data {
-      margin: 0 0 .7rem; font-size: .78rem; line-height: 1.45;
+      margin: 0 0 .7rem; font-size: .76rem; line-height: 1.45;
       padding: .5rem .6rem; border-radius: 6px; background: #f4f8fb;
     }
     button {
@@ -36,22 +37,22 @@
       font: inherit; font-weight: 700; font-size: .9rem;
       padding: .55rem .9rem; border-radius: 8px; cursor: pointer;
     }
-    button:hover { filter: brightness(1.05); }
     #status { margin-top: .55rem; font-size: .75rem; opacity: .7; text-align: center; }
   </style>
 </head>
 <body>
   <canvas id="c"></canvas>
   <div class="hud">
-    <h1>Tirer → rebondir</h1>
+    <h1>Tirer → paroi → main</h1>
     <div class="steps" id="steps">
       <span data-s="pull">1. Tirer</span>
-      <span data-s="bounce">2. Rebondir</span>
+      <span data-s="bounce">2. Paroi</span>
+      <span data-s="return">3. Main</span>
     </div>
     <div class="data">
-      Ballon <strong>3 × 3 cm</strong> · à mains nues<br />
-      r = 1,5 cm · V ≈ <strong>14,14 cm³</strong><br />
-      Pas de ruban — le personnage tient le ballon
+      Ballon <strong>taille de la main</strong> (pas plus gros)<br />
+      Élastique fin accroché à la <strong>main</strong><br />
+      Lâcher → rebond paroi → retour vers la main
     </div>
     <button type="button" id="replay">Rejouer</button>
     <div id="status">…</div>
@@ -69,12 +70,12 @@
     import * as THREE from "three";
     import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
-    // Données simples (cm)
-    const BALL_R = 1.5; // Ø 3 cm
-    const BALL_V = (4 / 3) * Math.PI * BALL_R ** 3;
-    const ANCHOR = new THREE.Vector3(0, 0.8, 0); // point d’ancrage invisible (rappel)
-    const REST_LEN = 8;
-    const WALL_X = 15;
+    // Unités scène ≈ cm. Main (sphère) r≈0.36 → ballon un peu plus petit que la paume
+    const HAND_R = 0.36;
+    const BALL_R = 0.40; // taille main — pas plus gros
+    const ELASTIC_R = 0.06; // fil fin proportionné
+    const REST_LEN = 5.5;
+    const WALL_X = 14;
 
     const statusEl = document.getElementById("status");
     const stepEls = [...document.querySelectorAll("#steps span")];
@@ -92,12 +93,12 @@
     scene.background = new THREE.Color(0xeaf1f5);
 
     const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.5, 200);
-    camera.position.set(4, 12, 28);
+    camera.position.set(3, 11, 26);
     const controls = new OrbitControls(camera, canvas);
-    controls.target.set(5, 5, 0);
+    controls.target.set(4, 5, 0);
     controls.enableDamping = true;
-    controls.minDistance = 14;
-    controls.maxDistance = 55;
+    controls.minDistance = 12;
+    controls.maxDistance = 50;
 
     scene.add(new THREE.AmbientLight(0xffffff, 0.85));
     const sun = new THREE.DirectionalLight(0xfff5ea, 1.05);
@@ -120,23 +121,30 @@
     wall.position.set(WALL_X + 0.2, 10, 0);
     scene.add(wall);
 
-    // Petite base d’ancrage (rappel invisible vers ce point)
-    const base = new THREE.Mesh(
-      new THREE.CylinderGeometry(1.15, 1.35, 0.75, 24),
-      new THREE.MeshStandardMaterial({ color: 0xc4894e, roughness: 0.55 })
-    );
-    base.position.set(0, 0.38, 0);
-    base.castShadow = true;
-    scene.add(base);
-
+    // Ballon
     const ball = new THREE.Mesh(
-      new THREE.SphereGeometry(BALL_R, 28, 20),
+      new THREE.SphereGeometry(BALL_R, 24, 18),
       new THREE.MeshStandardMaterial({ color: 0xe94b52, roughness: 0.4 })
     );
     ball.castShadow = true;
     scene.add(ball);
 
-    // ——— Personnage (mains nues, pas de ruban) ———
+    // Élastique fin (main → ballon) — pas de ruban
+    const elastic = new THREE.Mesh(
+      new THREE.CylinderGeometry(ELASTIC_R, ELASTIC_R, 1, 8),
+      new THREE.MeshStandardMaterial({ color: 0xebd9b8, roughness: 0.55 })
+    );
+    scene.add(elastic);
+
+    function updateElastic(anchor, tip) {
+      const mid = anchor.clone().add(tip).multiplyScalar(0.5);
+      const dir = tip.clone().sub(anchor);
+      const len = Math.max(dir.length(), 0.05);
+      elastic.position.copy(mid);
+      elastic.scale.set(1, len, 1);
+      elastic.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+    }
+
     function makePerson() {
       const g = new THREE.Group();
       const skin = new THREE.MeshStandardMaterial({ color: 0xe8b89a, roughness: 0.7 });
@@ -158,7 +166,7 @@
       const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.26, 1.45, 3, 6), skin);
       upper.position.y = -0.9;
       armR.add(upper);
-      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.36, 10, 8), skin);
+      const hand = new THREE.Mesh(new THREE.SphereGeometry(HAND_R, 12, 10), skin);
       hand.position.y = -1.9;
       armR.add(hand);
       g.add(armR);
@@ -179,13 +187,13 @@
     }
 
     const person = makePerson();
-    person.position.set(-6, 0, 2);
-    person.rotation.y = 0.45;
+    person.position.set(-5.5, 0, 2);
+    person.rotation.y = 0.4;
     scene.add(person);
 
     function setArm(amount) {
       const arm = person.userData.armR;
-      arm.rotation.x = -0.15 - amount * 1.25;
+      arm.rotation.x = -0.15 - amount * 1.2;
       arm.rotation.z = -0.1 - amount * 0.25;
       arm.rotation.y = amount * 0.35;
     }
@@ -196,80 +204,79 @@
       return p;
     }
 
-    /** Pendant la prise : ballon collé dans la main. */
-    function holdBallInHand() {
-      const h = handWorld();
-      // Légèrement devant la paume
-      state.pos.copy(h);
-      state.pos.x += 0.55;
-      state.pos.y += 0.15;
-      ball.position.copy(state.pos);
-    }
-
     const state = {
       phase: "pull", // pull | bounce | done
       t: 0,
       pos: new THREE.Vector3(),
       vel: new THREE.Vector3(),
       bounceCount: 0,
+      hitWall: false,
     };
 
-    const K = 3.2;
-    const DAMP = 0.5;
-    const REST = 0.7;
-    const GRAV = -20;
+    const K = 9.5;       // rappel ferme vers la main
+    const DAMP = 0.55;
+    const REST = 0.72;   // restitution paroi
+    const GRAV = -16;
 
     function reset() {
       state.phase = "pull";
       state.t = 0;
       state.bounceCount = 0;
+      state.hitWall = false;
       state.vel.set(0, 0, 0);
-      state.pos.set(0, ANCHOR.y + REST_LEN, 0);
-      person.position.set(-6, 0, 2);
+      person.position.set(-5.5, 0, 2);
       setArm(0);
       setStepUI("pull");
-      statusEl.textContent = "Il attrape le ballon à la main…";
+      statusEl.textContent = "Il saisit le ballon…";
+      const h = handWorld();
+      state.pos.copy(h).add(new THREE.Vector3(0.7, 0.1, 0));
       ball.position.copy(state.pos);
+      updateElastic(h, state.pos);
     }
 
     function stepPull(dt) {
       state.t += dt;
       const t = state.t;
 
-      if (t < 0.7) {
-        // Approche
-        const u = t / 0.7;
-        person.position.x = -6 + u * 3.2;
-        person.position.z = 2 - u * 1.5;
-        setArm(u * 0.85);
-        state.pos.set(0, ANCHOR.y + REST_LEN, 0);
-        ball.position.copy(state.pos);
-        statusEl.textContent = "Approche…";
-      } else if (t < 2.0) {
-        // Tient le ballon à mains nues et tire en arrière
-        const u = (t - 0.7) / 1.3;
-        setArm(0.85 + u * 0.2);
-        person.position.x = -2.8 - u * 2.2;
-        person.position.z = 0.5;
-        holdBallInHand();
-        statusEl.textContent = "Il tire le ballon…";
+      if (t < 0.65) {
+        const u = t / 0.65;
+        person.position.x = -5.5 + u * 2.0;
+        person.position.z = 2 - u * 1.0;
+        setArm(u * 0.8);
+        const h = handWorld();
+        state.pos.copy(h).add(new THREE.Vector3(0.65, 0.1, 0));
+        statusEl.textContent = "Prise en main…";
+      } else if (t < 1.7) {
+        const u = (t - 0.65) / 1.05;
+        setArm(0.8 + u * 0.2);
+        // Tire en arrière (charge) — ballon reste dans la main
+        person.position.x = -3.5 - u * 1.8;
+        person.position.z = 1.0;
+        const h = handWorld();
+        state.pos.copy(h).add(new THREE.Vector3(0.55, 0.12, 0));
+        statusEl.textContent = "Il tire…";
       } else {
-        // Lâche — impulsions vers la paroi
-        setArm(0.15);
+        // Lâcher vers la paroi
+        setArm(0.25);
         state.phase = "bounce";
         state.t = 0;
-        state.vel.set(30, 7, 0);
+        state.vel.set(26, 5, 0); // vers la paroi
         setStepUI("bounce");
-        statusEl.textContent = "Lâché — rebond…";
+        statusEl.textContent = "Lâché → vers la paroi…";
       }
+
+      ball.position.copy(state.pos);
+      updateElastic(handWorld(), state.pos);
     }
 
     function stepBounce(dt) {
       state.t += dt;
-      setArm(Math.max(0, 0.2 - state.t * 0.15));
+      setArm(Math.max(0.1, 0.3 - state.t * 0.08));
 
-      // Rappel invisible vers la base (jouet classique, sans ruban visible)
-      const toA = ANCHOR.clone().sub(state.pos);
+      // Ancrage = main de l'homme (retour vers la main)
+      const anchor = handWorld();
+
+      const toA = anchor.clone().sub(state.pos);
       const dist = toA.length();
       const dir = toA.multiplyScalar(1 / Math.max(dist, 1e-6));
       const force = dir.multiplyScalar(K * (dist - REST_LEN));
@@ -279,30 +286,49 @@
       state.vel.multiplyScalar(1 - DAMP * dt);
       state.pos.addScaledVector(state.vel, dt);
 
+      // ——— Rebond sur la paroi verticale ———
       if (state.pos.x + BALL_R > WALL_X && state.vel.x > 0) {
         state.pos.x = WALL_X - BALL_R;
         state.vel.x *= -REST;
         state.bounceCount += 1;
-        statusEl.textContent = `Rebond ${state.bounceCount}`;
-      }
-      if (state.pos.y < BALL_R) {
-        state.pos.y = BALL_R;
-        state.vel.y *= -0.28;
+        state.hitWall = true;
+        setStepUI("return");
+        statusEl.textContent = "Rebond paroi → retour main…";
       }
 
-      if (state.bounceCount >= 1 && state.vel.length() < 1.5 && Math.abs(dist - REST_LEN) < 1.5) {
+      if (state.pos.y < BALL_R) {
+        state.pos.y = BALL_R;
+        state.vel.y *= -0.25;
+      }
+
+      // Arrêt : après au moins 1 rebond mur, ballon revenu près de la main
+      const nearHand = state.pos.distanceTo(anchor) < REST_LEN * 0.55 + BALL_R;
+      if (state.hitWall && state.vel.length() < 2.0 && nearHand) {
         state.phase = "done";
         state.vel.set(0, 0, 0);
-        statusEl.textContent = `OK · V ≈ ${BALL_V.toFixed(2)} cm³`;
+        state.pos.copy(anchor).add(new THREE.Vector3(0.55, 0.1, 0));
+        statusEl.textContent = "De retour dans la main";
+        setStepUI("return");
+      }
+
+      // Sécurité : si jamais pas de mur après longtemps, forcer retour
+      if (!state.hitWall && state.t > 2.5) {
+        statusEl.textContent = "Retour vers la main…";
+        setStepUI("return");
       }
 
       ball.position.copy(state.pos);
+      updateElastic(anchor, state.pos);
     }
 
     function step(dt) {
       if (state.phase === "pull") stepPull(dt);
       else if (state.phase === "bounce") stepBounce(dt);
-      else ball.position.copy(state.pos);
+      else {
+        const h = handWorld();
+        ball.position.copy(state.pos);
+        updateElastic(h, state.pos);
+      }
     }
 
     document.getElementById("replay").addEventListener("click", reset);

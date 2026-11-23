@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Petit ballon 3×3 cm accroché à un ruban + base.
-Dimensions en millimètres. Volume sphère : V = 4/3 π r³.
+Petit ballon à la taille d'une main + élastique fin + base.
+Pas de ruban. Dimensions en millimètres.
 """
 
 from __future__ import annotations
@@ -15,19 +15,18 @@ from stl import mesh as stl_mesh
 OUT = Path(__file__).resolve().parent / "models"
 OUT.mkdir(parents=True, exist_ok=True)
 
-# Ballon : 3 cm de large × 3 cm de haut → Ø 30 mm, r = 15 mm
-BALL_W_MM = 30.0
-BALL_H_MM = 30.0
-BALL_R = BALL_W_MM / 2.0  # 15 mm
-BALL_VOLUME_CM3 = (4.0 / 3.0) * math.pi * (BALL_R / 10.0) ** 3  # r en cm
+# Ballon ≈ taille d'une main (légèrement plus petit que la paume adulte)
+# Ø 28 mm → r = 14 mm  (visible « dans la main » du personnage)
+BALL_R = 14.0
+BALL_VOLUME_CM3 = (4.0 / 3.0) * math.pi * (BALL_R / 10.0) ** 3
 
-BASE_R = 12.0
-BASE_H = 8.0
-RIBBON_W = 6.0   # largeur ruban (mm)
-RIBBON_T = 0.6   # épaisseur
-RIBBON_LEN = 90.0  # longueur au repos (mm)
+BASE_R = 10.0
+BASE_H = 6.0
+# Élastique fin, proportionné au ballon
+ELASTIC_R = 0.9  # mm
+ELASTIC_LEN = 55.0  # mm au repos
 ANCHOR = (0.0, 0.0, BASE_H)
-BALL_CENTER = (0.0, 0.0, BASE_H + RIBBON_LEN + BALL_R)
+BALL_CENTER = (0.0, 0.0, BASE_H + ELASTIC_LEN + BALL_R)
 
 
 def icosphere(radius: float, subdivisions: int = 3, center=(0.0, 0.0, 0.0)):
@@ -90,35 +89,34 @@ def cylinder(radius, height, segments=24, center=(0.0, 0.0, 0.0)):
     return v, np.array(faces, dtype=np.int32)
 
 
-def ribbon_box(start, end, width=RIBBON_W, thickness=RIBBON_T):
-    """Ruban plat (boîte allongée) de start → end, largeur sur X."""
+def elastic_tube(start, end, radius=ELASTIC_R, segments=8, rings=20):
     start = np.array(start, dtype=np.float64)
     end = np.array(end, dtype=np.float64)
     direction = end - start
-    length = np.linalg.norm(direction)
+    length = float(np.linalg.norm(direction))
     direction /= length
-    up = np.array([0.0, 1.0, 0.0]) if abs(direction[1]) < 0.9 else np.array([1.0, 0.0, 0.0])
+    up = np.array([0.0, 0.0, 1.0]) if abs(direction[2]) < 0.9 else np.array([1.0, 0.0, 0.0])
     right = np.cross(direction, up)
     right /= np.linalg.norm(right)
     up = np.cross(right, direction)
 
-    hw, ht = width / 2, thickness / 2
-    corners = []
-    for s in (0.0, 1.0):
-        p = start + direction * (s * length)
-        for sx in (-1, 1):
-            for sy in (-1, 1):
-                corners.append(p + right * (sx * hw) + up * (sy * ht))
-    # indices: 0..3 at start, 4..7 at end
-    faces = [
-        (0, 1, 5), (0, 5, 4),
-        (1, 3, 7), (1, 7, 5),
-        (3, 2, 6), (3, 6, 7),
-        (2, 0, 4), (2, 4, 6),
-        (4, 5, 7), (4, 7, 6),
-        (0, 2, 3), (0, 3, 1),
-    ]
-    return np.array(corners, dtype=np.float64), np.array(faces, dtype=np.int32)
+    verts, faces = [], []
+    for i in range(rings + 1):
+        t = i / rings
+        p = start + direction * (t * length)
+        for j in range(segments):
+            a = 2 * math.pi * j / segments
+            verts.append(p + (right * math.cos(a) + up * math.sin(a)) * radius)
+    for i in range(rings):
+        for j in range(segments):
+            j2 = (j + 1) % segments
+            a = i * segments + j
+            b = i * segments + j2
+            c = (i + 1) * segments + j2
+            d = (i + 1) * segments + j
+            faces.append((a, b, c))
+            faces.append((a, c, d))
+    return np.array(verts, dtype=np.float64), np.array(faces, dtype=np.int32)
 
 
 def merge_parts(parts):
@@ -139,7 +137,7 @@ def to_stl(verts, faces, path: Path):
 
 def write_obj_mtl(groups, obj_path: Path, mtl_path: Path, materials):
     with mtl_path.open("w", encoding="utf-8") as mf:
-        mf.write("# Matières jouet — ballon + ruban\n")
+        mf.write("# Matières — ballon main + élastique fin\n")
         for name, props in materials.items():
             kd = props["Kd"]
             mf.write(f"newmtl {name}\n")
@@ -148,7 +146,7 @@ def write_obj_mtl(groups, obj_path: Path, mtl_path: Path, materials):
             mf.write(f"Ns {props['Ns']:.1f}\n\n")
 
     with obj_path.open("w", encoding="utf-8") as of:
-        of.write(f"# Ballon {BALL_W_MM:.0f}×{BALL_H_MM:.0f} mm, V={BALL_VOLUME_CM3:.3f} cm³\n")
+        of.write(f"# Ballon r={BALL_R} mm (taille main), V={BALL_VOLUME_CM3:.3f} cm3 — sans ruban\n")
         of.write(f"mtllib {mtl_path.name}\n")
         offset = 0
         for gname, (verts, faces, mat) in groups.items():
@@ -161,63 +159,56 @@ def write_obj_mtl(groups, obj_path: Path, mtl_path: Path, materials):
 
 
 def main():
-    print(f"Ballon Ø {BALL_W_MM:.0f} mm × {BALL_H_MM:.0f} mm  →  r = {BALL_R:.1f} mm")
-    print(f"Volume V = 4/3 π r³ = {BALL_VOLUME_CM3:.3f} cm³  ({BALL_VOLUME_CM3 * 1000:.1f} mm³)")
+    print(f"Ballon r={BALL_R} mm (taille main), V={BALL_VOLUME_CM3:.3f} cm³")
+    print(f"Élastique Ø {ELASTIC_R * 2:.1f} mm, L={ELASTIC_LEN:.0f} mm — pas de ruban")
 
-    base_v, base_f = cylinder(BASE_R, BASE_H, 32, center=(0.0, 0.0, BASE_H / 2))
+    base_v, base_f = cylinder(BASE_R, BASE_H, 28, center=(0.0, 0.0, BASE_H / 2))
     ball_v, ball_f = icosphere(BALL_R, 3, center=BALL_CENTER)
-    ribbon_end = (BALL_CENTER[0], BALL_CENTER[1], BALL_CENTER[2] - BALL_R)
-    ribbon_v, ribbon_f = ribbon_box(ANCHOR, ribbon_end)
+    elastic_end = (BALL_CENTER[0], BALL_CENTER[1], BALL_CENTER[2] - BALL_R)
+    elastic_v, elastic_f = elastic_tube(ANCHOR, elastic_end)
 
     materials = {
         "BaseBois": {"Kd": (0.76, 0.55, 0.32), "Ks": (0.2, 0.15, 0.1), "Ns": 40.0},
         "BallonCaoutchouc": {"Kd": (0.92, 0.28, 0.32), "Ks": (0.35, 0.35, 0.35), "Ns": 80.0},
-        "RubanSatin": {"Kd": (0.95, 0.78, 0.35), "Ks": (0.45, 0.4, 0.25), "Ns": 70.0},
+        "ElastiqueLatex": {"Kd": (0.92, 0.86, 0.72), "Ks": (0.3, 0.3, 0.25), "Ns": 50.0},
     }
     groups = {
         "base": (base_v, base_f, "BaseBois"),
         "ballon": (ball_v, ball_f, "BallonCaoutchouc"),
-        "ruban": (ribbon_v, ribbon_f, "RubanSatin"),
+        "elastique": (elastic_v, elastic_f, "ElastiqueLatex"),
     }
 
     write_obj_mtl(groups, OUT / "ballon_elastique.obj", OUT / "ballon_elastique.mtl", materials)
-    # Alias lisible
-    write_obj_mtl(groups, OUT / "ballon_ruban.obj", OUT / "ballon_ruban.mtl", materials)
 
     to_stl(base_v, base_f, OUT / "base.stl")
     to_stl(ball_v, ball_f, OUT / "ballon.stl")
-    to_stl(ribbon_v, ribbon_f, OUT / "ruban.stl")
-    # Compat anciens noms
-    to_stl(ribbon_v, ribbon_f, OUT / "elastique.stl")
+    to_stl(elastic_v, elastic_f, OUT / "elastique.stl")
     all_v, all_f = merge_parts([(v, f) for v, f, _ in groups.values()])
     to_stl(all_v, all_f, OUT / "ballon_elastique.stl")
-    to_stl(all_v, all_f, OUT / "ballon_ruban.stl")
+
+    # Supprimer vestiges ruban
+    for obsolete in ("ruban.stl", "ballon_ruban.obj", "ballon_ruban.mtl", "ballon_ruban.stl"):
+        p = OUT / obsolete
+        if p.exists():
+            p.unlink()
+            print("supprimé", p.name)
 
     (OUT.parent / "MATIERES.md").write_text(
-        f"""# Ballon 3×3 cm + ruban
+        f"""# Ballon taille main + élastique fin
 
-## Dimensions & volume
+**Pas de ruban.** Le personnage tient le ballon à la main ; l’élastique le rappelle vers la main.
 
 | Grandeur | Valeur |
 |----------|--------|
-| Largeur | **3 cm** (30 mm) |
-| Hauteur | **3 cm** (30 mm) |
-| Rayon | 1,5 cm |
-| **Volume** | **V = 4/3 π r³ ≈ {BALL_VOLUME_CM3:.2f} cm³** |
+| Rayon ballon | {BALL_R:.0f} mm (≈ taille main) |
+| Volume | V ≈ {BALL_VOLUME_CM3:.2f} cm³ |
+| Élastique | Ø {ELASTIC_R * 2:.1f} mm, L repos {ELASTIC_LEN:.0f} mm |
 
-Formule : avec \( r = 1{','}5\\,\\mathrm{{cm}} \),
-\( V = \\frac{{4}}{{3}}\\pi (1{','}5)^3 = 4{','}5\\pi \\approx {BALL_VOLUME_CM3:.3f}\\,\\mathrm{{cm}}^3 \).
-
-## Matières
-
-| Pièce | Matière | Couleur | Hex |
-|-------|---------|---------|-----|
-| Base | Bois verni | Brun miel | `#C28C52` |
-| Ballon | Caoutchouc / TPE | Rouge corail | `#EB4752` |
-| Ruban | Satin / tissu | Or doux | `#F2C759` |
-
-Fichiers : `models/ballon_ruban.obj` (+ `.mtl`), `.stl`.
-Simulation : ouvrir `index.html`.
+| Pièce | Couleur | Hex |
+|-------|---------|-----|
+| Base | Brun miel | `#C28C52` |
+| Ballon | Rouge corail | `#EB4752` |
+| Élastique | Latex crème | `#EBD9B8` |
 """,
         encoding="utf-8",
     )
