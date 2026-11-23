@@ -9,9 +9,6 @@
       --bg: #eaf1f5;
       --ink: #243040;
       --accent: #e94b52;
-      --ribbon: #f0c24d;
-      --wood: #c4894e;
-      --guy: #5a7d9a;
     }
     * { box-sizing: border-box; }
     html, body { margin: 0; height: 100%; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--ink); }
@@ -22,7 +19,7 @@
       padding: .85rem 1rem; border-radius: 10px; width: min(20rem, calc(100vw - 2rem));
       box-shadow: 0 6px 20px rgba(30,50,70,.1);
     }
-    .hud h1 { margin: 0 0 .4rem; font-size: 1.05rem; font-weight: 700; letter-spacing: -.01em; }
+    .hud h1 { margin: 0 0 .4rem; font-size: 1.05rem; font-weight: 700; }
     .steps { display: flex; gap: .4rem; margin: 0 0 .65rem; }
     .steps span {
       flex: 1; text-align: center; font-size: .72rem; font-weight: 650;
@@ -33,7 +30,6 @@
       margin: 0 0 .7rem; font-size: .78rem; line-height: 1.45;
       padding: .5rem .6rem; border-radius: 6px; background: #f4f8fb;
     }
-    .data strong { font-weight: 700; }
     button {
       appearance: none; border: 0; width: 100%;
       background: var(--accent); color: #fff;
@@ -53,9 +49,9 @@
       <span data-s="bounce">2. Rebondir</span>
     </div>
     <div class="data">
-      Ballon <strong>3 × 3 cm</strong><br />
-      r = 1,5 cm · V = 4/3 π r³ ≈ <strong>14,14 cm³</strong><br />
-      Ruban + personnage + paroi
+      Ballon <strong>3 × 3 cm</strong> · à mains nues<br />
+      r = 1,5 cm · V ≈ <strong>14,14 cm³</strong><br />
+      Pas de ruban — le personnage tient le ballon
     </div>
     <button type="button" id="replay">Rejouer</button>
     <div id="status">…</div>
@@ -73,18 +69,15 @@
     import * as THREE from "three";
     import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
-    // ——— Données simples (cm) ———
-    const BALL_W = 3;
-    const BALL_H = 3;
-    const BALL_R = 1.5;
-    const BALL_V = (4 / 3) * Math.PI * BALL_R ** 3; // ≈ 14.14 cm³
-    const ANCHOR = new THREE.Vector3(0, 0.8, 0);
+    // Données simples (cm)
+    const BALL_R = 1.5; // Ø 3 cm
+    const BALL_V = (4 / 3) * Math.PI * BALL_R ** 3;
+    const ANCHOR = new THREE.Vector3(0, 0.8, 0); // point d’ancrage invisible (rappel)
     const REST_LEN = 8;
     const WALL_X = 15;
 
     const statusEl = document.getElementById("status");
     const stepEls = [...document.querySelectorAll("#steps span")];
-
     function setStepUI(name) {
       stepEls.forEach((el) => el.classList.toggle("on", el.dataset.s === name));
     }
@@ -100,7 +93,6 @@
 
     const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.5, 200);
     camera.position.set(4, 12, 28);
-
     const controls = new OrbitControls(camera, canvas);
     controls.target.set(5, 5, 0);
     controls.enableDamping = true;
@@ -128,6 +120,7 @@
     wall.position.set(WALL_X + 0.2, 10, 0);
     scene.add(wall);
 
+    // Petite base d’ancrage (rappel invisible vers ce point)
     const base = new THREE.Mesh(
       new THREE.CylinderGeometry(1.15, 1.35, 0.75, 24),
       new THREE.MeshStandardMaterial({ color: 0xc4894e, roughness: 0.55 })
@@ -143,25 +136,7 @@
     ball.castShadow = true;
     scene.add(ball);
 
-    const ribbon = new THREE.Mesh(
-      new THREE.BoxGeometry(0.65, 1, 0.07),
-      new THREE.MeshStandardMaterial({ color: 0xf0c24d, roughness: 0.45, side: THREE.DoubleSide })
-    );
-    ribbon.castShadow = true;
-    scene.add(ribbon);
-
-    function updateRibbon(pos) {
-      const tip = pos.clone();
-      tip.y -= BALL_R * 0.2;
-      const mid = ANCHOR.clone().add(tip).multiplyScalar(0.5);
-      const dir = tip.clone().sub(ANCHOR);
-      const len = Math.max(dir.length(), 0.05);
-      ribbon.position.copy(mid);
-      ribbon.scale.set(1, len, 1);
-      ribbon.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
-    }
-
-    // Personnage simple
+    // ——— Personnage (mains nues, pas de ruban) ———
     function makePerson() {
       const g = new THREE.Group();
       const skin = new THREE.MeshStandardMaterial({ color: 0xe8b89a, roughness: 0.7 });
@@ -183,7 +158,7 @@
       const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.26, 1.45, 3, 6), skin);
       upper.position.y = -0.9;
       armR.add(upper);
-      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.32, 10, 8), skin);
+      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.36, 10, 8), skin);
       hand.position.y = -1.9;
       armR.add(hand);
       g.add(armR);
@@ -215,9 +190,24 @@
       arm.rotation.y = amount * 0.35;
     }
 
-    // Phases : pull | bounce | done
+    function handWorld() {
+      const p = new THREE.Vector3();
+      person.userData.hand.getWorldPosition(p);
+      return p;
+    }
+
+    /** Pendant la prise : ballon collé dans la main. */
+    function holdBallInHand() {
+      const h = handWorld();
+      // Légèrement devant la paume
+      state.pos.copy(h);
+      state.pos.x += 0.55;
+      state.pos.y += 0.15;
+      ball.position.copy(state.pos);
+    }
+
     const state = {
-      phase: "pull",
+      phase: "pull", // pull | bounce | done
       t: 0,
       pos: new THREE.Vector3(),
       vel: new THREE.Vector3(),
@@ -238,51 +228,47 @@
       person.position.set(-6, 0, 2);
       setArm(0);
       setStepUI("pull");
-      statusEl.textContent = "Le personnage tire le ruban…";
+      statusEl.textContent = "Il attrape le ballon à la main…";
       ball.position.copy(state.pos);
-      updateRibbon(state.pos);
     }
 
     function stepPull(dt) {
       state.t += dt;
-      // 0–0.8 s : approche + grab ; 0.8–2.0 s : tirage ; puis lâcher
       const t = state.t;
 
-      if (t < 0.8) {
-        const u = t / 0.8;
-        person.position.x = -6 + u * 2.5;
-        person.position.z = 2 - u * 1.2;
-        setArm(u * 0.75);
+      if (t < 0.7) {
+        // Approche
+        const u = t / 0.7;
+        person.position.x = -6 + u * 3.2;
+        person.position.z = 2 - u * 1.5;
+        setArm(u * 0.85);
         state.pos.set(0, ANCHOR.y + REST_LEN, 0);
+        ball.position.copy(state.pos);
+        statusEl.textContent = "Approche…";
       } else if (t < 2.0) {
-        const u = (t - 0.8) / 1.2;
-        setArm(0.75 + u * 0.25);
-        person.position.x = -3.5 - u * 1.2;
-        // Tire en arrière (loin du mur) pour charger le rebond
-        state.pos.set(
-          -u * 4.5,
-          ANCHOR.y + REST_LEN * (0.7 + u * 0.15),
-          1.2
-        );
-        statusEl.textContent = "Tirer…";
+        // Tient le ballon à mains nues et tire en arrière
+        const u = (t - 0.7) / 1.3;
+        setArm(0.85 + u * 0.2);
+        person.position.x = -2.8 - u * 2.2;
+        person.position.z = 0.5;
+        holdBallInHand();
+        statusEl.textContent = "Il tire le ballon…";
       } else {
-        // Lâcher vers la paroi
-        setArm(0.2);
+        // Lâche — impulsions vers la paroi
+        setArm(0.15);
         state.phase = "bounce";
         state.t = 0;
-        state.vel.set(28, 6, 0);
+        state.vel.set(30, 7, 0);
         setStepUI("bounce");
-        statusEl.textContent = "Rebondir…";
+        statusEl.textContent = "Lâché — rebond…";
       }
-
-      ball.position.copy(state.pos);
-      updateRibbon(state.pos);
     }
 
     function stepBounce(dt) {
       state.t += dt;
-      setArm(Math.max(0, 0.25 - state.t * 0.2));
+      setArm(Math.max(0, 0.2 - state.t * 0.15));
 
+      // Rappel invisible vers la base (jouet classique, sans ruban visible)
       const toA = ANCHOR.clone().sub(state.pos);
       const dist = toA.length();
       const dir = toA.multiplyScalar(1 / Math.max(dist, 1e-6));
@@ -311,16 +297,12 @@
       }
 
       ball.position.copy(state.pos);
-      updateRibbon(state.pos);
     }
 
     function step(dt) {
       if (state.phase === "pull") stepPull(dt);
       else if (state.phase === "bounce") stepBounce(dt);
-      else {
-        ball.position.copy(state.pos);
-        updateRibbon(state.pos);
-      }
+      else ball.position.copy(state.pos);
     }
 
     document.getElementById("replay").addEventListener("click", reset);
