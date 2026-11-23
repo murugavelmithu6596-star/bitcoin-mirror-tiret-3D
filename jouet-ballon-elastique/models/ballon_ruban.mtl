@@ -1,0 +1,16 @@
+# Matières jouet — ballon + ruban
+newmtl BaseBois
+Kd 0.7600 0.5500 0.3200
+Ks 0.2000 0.1500 0.1000
+Ns 40.0
+
+newmtl BallonCaoutchouc
+Kd 0.9200 0.2800 0.3200
+Ks 0.3500 0.3500 0.3500
+Ns 80.0
+
+newmtl RubanSatin
+Kd 0.9500 0.7800 0.3500
+Ks 0.4500 0.4000 0.2500
+Ns 70.0
+
