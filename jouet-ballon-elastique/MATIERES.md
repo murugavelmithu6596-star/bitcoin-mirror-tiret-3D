@@ -1,15 +1,10 @@
-# Ballon taille main + élastique fin
-
-**Pas de ruban.** Le personnage tient le ballon à la main ; l’élastique le rappelle vers la main.
+# Sphère 6 cm + petit ruban fin
 
 | Grandeur | Valeur |
 |----------|--------|
-| Rayon ballon | 14 mm (≈ taille main) |
-| Volume | V ≈ 11.49 cm³ |
-| Élastique | Ø 1.8 mm, L repos 55 mm |
+| Largeur sphère | **6 cm** (Ø 60 mm) |
+| Rayon | 3 cm |
+| Volume | V = 4/3 π r³ ≈ **113.1 cm³** |
+| Ruban | fin 4.0×0.45 mm, L=70 mm |
 
-| Pièce | Couleur | Hex |
-|-------|---------|-----|
-| Base | Brun miel | `#C28C52` |
-| Ballon | Rouge corail | `#EB4752` |
-| Élastique | Latex crème | `#EBD9B8` |
+Geste : lance-pierres — tirer le ruban, viser, lâcher → paroi → retour main.
