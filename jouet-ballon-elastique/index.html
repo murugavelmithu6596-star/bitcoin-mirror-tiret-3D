@@ -89,15 +89,15 @@
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xe8f0f4);
 
-    const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.05, 50);
-    // Cadrage initial : jouet + paroi bien visibles dès l’ouverture
-    camera.position.set(0.55, 1.15, 3.35);
+    const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.05, 50);
+    // Cadrage large : base + ballon + paroi visibles même en fenêtre basse (~660 px)
+    camera.position.set(0.35, 1.45, 4.8);
 
     const controls = new OrbitControls(camera, canvas);
-    controls.target.set(0.55, 0.75, 0);
+    controls.target.set(0.55, 0.7, 0);
     controls.enableDamping = true;
-    controls.minDistance = 1.2;
-    controls.maxDistance = 8;
+    controls.minDistance = 2.0;
+    controls.maxDistance = 10;
     controls.maxPolarAngle = Math.PI * 0.49;
 
     scene.add(new THREE.AmbientLight(0xffffff, 0.8));
@@ -194,12 +194,12 @@
     }
 
     function frameToyAndWall() {
-      // Vise le milieu de la zone base → paroi, hauteur ballon
-      const focus = new THREE.Vector3(WALL_X * 0.42, 0.75, 0);
+      // Vue de trois-quarts, assez éloignée pour garder ballon + rebond dans le cadre
+      const focus = new THREE.Vector3(WALL_X * 0.4, 0.7, 0);
       controls.target.copy(focus);
-      camera.position.set(focus.x - 0.15, 1.2, 3.2);
+      camera.position.set(focus.x - 0.35, 1.45, 4.8);
       camera.near = 0.05;
-      camera.far = 40;
+      camera.far = 50;
       camera.updateProjectionMatrix();
       controls.update();
     }
@@ -219,9 +219,9 @@
 
     function reset() {
       if (!state.ready || !ball) return;
-      // Départ visible entre base et paroi, vers le mur
-      state.pos.set(0.45, 0.95, 0.08);
-      state.vel.set(2.6, 0.35, 0.02);
+      // Départ centré dans le cadre, trajectoire courte vers la paroi
+      state.pos.set(0.55, 0.85, 0.05);
+      state.vel.set(2.1, 0.25, 0.0);
       state.bounceCount = 0;
       state.bouncing = true;
       ball.position.copy(state.pos);
