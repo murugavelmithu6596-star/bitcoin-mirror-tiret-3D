@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ballon à élastique — rebond simple</title>
+  <style>
+    :root {
+      --bg: #e8f0f4;
+      --ink: #2a3340;
+      --accent: #eb4752;
+      --wood: #c28c52;
+      --latex: #f2e0b8;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--ink); }
+    #c { display: block; width: 100%; height: 100%; }
+    .hud {
+      position: fixed; left: 1rem; bottom: 1rem; z-index: 2;
+      background: rgba(255,255,255,.88); border: 1px solid #c5d0da;
+      padding: .75rem 1rem; border-radius: 8px; max-width: 18rem;
+      box-shadow: 0 4px 16px rgba(30,50,70,.08);
+    }
+    .hud h1 { margin: 0 0 .35rem; font-size: 1rem; font-weight: 650; }
+    .hud p { margin: 0 0 .65rem; font-size: .82rem; line-height: 1.35; opacity: .85; }
+    button {
+      appearance: none; border: 0; background: var(--accent); color: #fff;
+      font: inherit; font-weight: 600; font-size: .85rem;
+      padding: .45rem .9rem; border-radius: 6px; cursor: pointer;
+    }
+    button:hover { filter: brightness(1.05); }
+    .swatches { display: flex; gap: .4rem; margin-top: .55rem; flex-wrap: wrap; }
+    .swatch { width: .7rem; height: .7rem; border-radius: 2px; border: 1px solid rgba(0,0,0,.12); }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <div class="hud">
+    <h1>Ballon + élastique + paroi</h1>
+    <p>Simulation minimale : le ballon part vers le mur, rebondit une ou deux fois, l’élastique s’étire et le ramène.</p>
+    <button type="button" id="replay">Rejouer</button>
+    <div class="swatches" title="Couleurs suggérées">
+      <span class="swatch" style="background:#eb4752" title="Ballon"></span>
+      <span class="swatch" style="background:#f2e0b8" title="Élastique"></span>
+      <span class="swatch" style="background:#c28c52" title="Base"></span>
+      <span class="swatch" style="background:#9db0bf" title="Paroi"></span>
+    </div>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+    const BALL_R = 0.22;
+    const REST_LEN = 1.15;
+    const WALL_X = 1.55;
+    const ANCHOR = new THREE.Vector3(0, 0.12, 0);
+
+    const canvas = document.getElementById("c");
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.shadowMap.enabled = true;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xe8f0f4);
+
+    const camera = new THREE.PerspectiveCamera(42, innerWidth / innerHeight, 0.05, 40);
+    camera.position.set(2.4, 1.6, 3.2);
+
+    const controls = new OrbitControls(camera, canvas);
+    controls.target.set(0.6, 0.7, 0);
+    controls.enableDamping = true;
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+    const sun = new THREE.DirectionalLight(0xfff4e8, 1.05);
+    sun.position.set(2, 4, 3);
+    sun.castShadow = true;
+    scene.add(sun);
+
+    // Sol
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(8, 8),
+      new THREE.MeshStandardMaterial({ color: 0xd5e2ea, roughness: 0.95 })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    // Paroi verticale (plan)
+    const wall = new THREE.Mesh(
+      new THREE.PlaneGeometry(3.2, 2.4),
+      new THREE.MeshStandardMaterial({ color: 0x9db0bf, roughness: 0.85, side: THREE.DoubleSide })
+    );
+    wall.position.set(WALL_X, 1.2, 0);
+    wall.rotation.y = -Math.PI / 2;
+    wall.receiveShadow = true;
+    scene.add(wall);
+
+    // Base (ancrage)
+    const base = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.18, 0.22, 0.1, 24),
+      new THREE.MeshStandardMaterial({ color: 0xc28c52, roughness: 0.55, metalness: 0.05 })
+    );
+    base.position.copy(ANCHOR);
+    base.castShadow = true;
+    scene.add(base);
+
+    // Ballon
+    const ball = new THREE.Mesh(
+      new THREE.SphereGeometry(BALL_R, 32, 24),
+      new THREE.MeshStandardMaterial({ color: 0xeb4752, roughness: 0.45, metalness: 0.0 })
+    );
+    ball.castShadow = true;
+    scene.add(ball);
+
+    // Élastique (ligne simple)
+    const elasticGeo = new THREE.BufferGeometry().setFromPoints([ANCHOR.clone(), ANCHOR.clone()]);
+    const elastic = new THREE.Line(
+      elasticGeo,
+      new THREE.LineBasicMaterial({ color: 0xf2e0b8, linewidth: 2 })
+    );
+    scene.add(elastic);
+
+    // Tube élastique un peu plus visible
+    const elasticTube = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.018, 0.018, 1, 8),
+      new THREE.MeshStandardMaterial({ color: 0xf2e0b8, roughness: 0.6 })
+    );
+    scene.add(elasticTube);
+
+    function updateElastic(pos) {
+      const pts = elastic.geometry.attributes.position;
+      pts.setXYZ(0, ANCHOR.x, ANCHOR.y, ANCHOR.z);
+      pts.setXYZ(1, pos.x, pos.y, pos.z);
+      pts.needsUpdate = true;
+
+      const mid = ANCHOR.clone().add(pos).multiplyScalar(0.5);
+      const dir = pos.clone().sub(ANCHOR);
+      const len = dir.length();
+      elasticTube.position.copy(mid);
+      elasticTube.scale.set(1, len, 1);
+      elasticTube.quaternion.setFromUnitVectors(
+        new THREE.Vector3(0, 1, 0),
+        dir.clone().normalize()
+      );
+    }
+
+    // Physique minimale
+    const state = {
+      pos: new THREE.Vector3(),
+      vel: new THREE.Vector3(),
+      bouncing: true,
+      bounceCount: 0,
+      maxBounces: 2,
+    };
+
+    const K = 18;          // raideur élastique
+    const DAMP = 0.35;     // amortissement
+    const REST = 0.72;     // coefficient de restitution mur
+    const GRAV = -2.2;
+
+    function reset() {
+      state.pos.set(0.35, 0.95, 0.15);
+      state.vel.set(2.8, 0.4, 0.05);
+      state.bounceCount = 0;
+      state.bouncing = true;
+      ball.position.copy(state.pos);
+      updateElastic(state.pos);
+    }
+
+    function step(dt) {
+      if (!state.bouncing) return;
+      dt = Math.min(dt, 1 / 30);
+
+      // Force élastique (Hooke) vers l’ancrage
+      const toAnchor = ANCHOR.clone().sub(state.pos);
+      const dist = toAnchor.length();
+      const stretch = dist - REST_LEN;
+      const dir = toAnchor.multiplyScalar(1 / dist);
+      const force = dir.multiplyScalar(K * stretch);
+      force.y += GRAV;
+
+      state.vel.addScaledVector(force, dt);
+      state.vel.multiplyScalar(1 - DAMP * dt);
+      state.pos.addScaledVector(state.vel, dt);
+
+      // Collision plan vertical x = WALL_X
+      if (state.pos.x + BALL_R > WALL_X && state.vel.x > 0) {
+        state.pos.x = WALL_X - BALL_R;
+        state.vel.x *= -REST;
+        state.bounceCount += 1;
+        if (state.bounceCount >= state.maxBounces) {
+          // après 2 rebonds : laisser l’élastique ramener sans nouveau rebond mur
+          if (state.vel.x > 0) state.vel.x = 0;
+        }
+      }
+
+      // Sol
+      if (state.pos.y < BALL_R) {
+        state.pos.y = BALL_R;
+        state.vel.y *= -0.35;
+      }
+
+      // Arrêt quand presque au repos près de la longueur au repos
+      if (
+        state.bounceCount >= 1 &&
+        state.vel.length() < 0.12 &&
+        Math.abs(dist - REST_LEN) < 0.08
+      ) {
+        state.bouncing = false;
+        state.vel.set(0, 0, 0);
+      }
+
+      ball.position.copy(state.pos);
+      updateElastic(state.pos);
+    }
+
+    document.getElementById("replay").addEventListener("click", reset);
+    reset();
+
+    let last = performance.now();
+    function frame(now) {
+      const dt = (now - last) / 1000;
+      last = now;
+      step(dt);
+      controls.update();
+      renderer.render(scene, camera);
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+
+    addEventListener("resize", () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+  </script>
+</body>
+</html>
