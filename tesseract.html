@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101a2c">
+<title>Bitcoin Mirror 3D — Tesseract inversé</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:18px 14px 40px;background:#0a1221;color:#eaf3ff;font:15px -apple-system,BlinkMacSystemFont,system-ui,sans-serif}
+main{max-width:760px;margin:auto}
+h1{font-size:24px;margin:10px 0 6px}
+h2{font-size:18px;margin:0 0 8px}
+a{color:#9bd4ff}
+.muted,.help,small{color:#b7c7df;line-height:1.55;font-size:13px}
+.card{background:#15243a;border:1px solid #344761;border-radius:17px;margin:14px 0;padding:17px}
+.price{font-size:28px;font-weight:750;margin:4px 0}
+button{border:1px solid #6b819d;border-radius:10px;background:#263b58;color:#fff;padding:11px 13px;font-size:14px}
+button:active{opacity:.7}
+button.active{background:#385e87;border-color:#81abda}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:#cbd9e9;margin:8px 0}
+.stat{font-size:18px;font-weight:700;color:#ffd18f}
+.err{color:#ffb3aa}
+.notice{border-left:3px solid #e9b76c;padding-left:10px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:520px){.grid{grid-template-columns:1fr}}
+canvas{width:100%;height:auto;display:block;border-radius:12px;background:#101e32;touch-action:none}
+.pulse{display:inline-block;min-width:3.2em}
+table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+td,th{text-align:left;padding:6px 4px;border-bottom:1px solid #2a3d56;color:#c5d5ed}
+th{color:#9db0c9;font-weight:600}
+</style>
+</head>
+<body>
+<main>
+<a href="./index.html">← Bitcoin Mirror 3D</a>
+<h1>₿ Tesseract inversé · prédiction totale</h1>
+<p class="muted">Bitcoin est la lentille. Le tesseract (16 sommets, 32 arêtes, 24 faces, 8 cellules) est l’objet miroité. Les cycles de 2 s et 3 s ne sont pas de simples animations : chacun produit l’état géométrique prédit à <b>T−3 min</b> et <b>T+3 min</b> autour du timestamp Bitcoin exact.</p>
+
+<div class="card">
+  <small>BTC / USD · CoinGecko — lentille + horloge Bitcoin</small>
+  <div id="price" class="price">—</div>
+  <div id="btcClock" class="stat">T Bitcoin : —</div>
+  <div id="state" class="help">Chargement des données…</div>
+  <button id="refresh" type="button">↻ Actualiser la lentille</button>
+</div>
+
+<div class="card">
+  <h2>États prédits (±3 minutes)</h2>
+  <canvas id="view" width="720" height="480" role="img" aria-label="Tesseract prédit via Bitcoin"></canvas>
+  <div class="legend">
+    <span style="color:#5acfe9">● Prédiction T−3 min</span>
+    <span style="color:#ffbf62">● Prédiction T+3 min</span>
+    <span style="color:#bf9bff">● Arêtes de liaison (dimension miroir)</span>
+  </div>
+  <div class="grid">
+    <div>
+      <p class="muted">Cycle prédictif 2 s → plan xw</p>
+      <p>Phase 2 s : <span id="phase2" class="stat pulse">0 %</span></p>
+      <p class="help">À chaque tour de 2 s, recalcule la composante xw des états T±3 min.</p>
+    </div>
+    <div>
+      <p class="muted">Cycle prédictif 3 s → plan yw + intensité</p>
+      <p>Phase 3 s : <span id="phase3" class="stat pulse">0 %</span></p>
+      <p class="help">À chaque tour de 3 s, recalcule yw et l’intensité de lentille des états T±3 min.</p>
+    </div>
+  </div>
+  <table>
+    <thead><tr><th>Repère</th><th>Horodatage</th><th>Prix prédit</th><th>Lentille m</th></tr></thead>
+    <tbody>
+      <tr><td>T−3 min</td><td id="tBack">—</td><td id="pBack">—</td><td id="mBack">—</td></tr>
+      <tr><td>T Bitcoin</td><td id="tNow">—</td><td id="pNow">—</td><td id="mNow">—</td></tr>
+      <tr><td>T+3 min</td><td id="tFwd">—</td><td id="pFwd">—</td><td id="mFwd">—</td></tr>
+    </tbody>
+  </table>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+    <button id="pause" type="button" class="active">⏸ Pause</button>
+    <button id="resume" type="button">▶ Reprendre</button>
+  </div>
+  <p class="help notice" style="margin-top:12px">Prévisions géométriques illustratives fondées sur la dérive récente du log-prix. Pas un conseil financier.</p>
+</div>
+
+<div class="card">
+  <h2>Comment la prédiction est branchée sur le timing</h2>
+  <p class="muted">1. <b>Horloge Bitcoin exacte T</b> — dernier <code>last_updated_at</code> CoinGecko (secondes Unix), pas l’horloge locale seule.</p>
+  <p class="muted">2. <b>Offsets totaux</b> — à chaque cycle on reconstruit la lentille et la géométrie en T−180 s et T+180 s via dérive minute : <code>P(Δ) = P₀ · exp(μ·Δ)</code>, puis <code>m(Δ) = f(P(Δ), σ)</code>.</p>
+  <p class="muted">3. <b>Cycle 2 s</b> — quand la phase 2 s revient à 0, on fige la prédiction xw des deux états ±3 min (prochain état du plan miroir).</p>
+  <p class="muted">4. <b>Cycle 3 s</b> — quand la phase 3 s revient à 0, on fige la prédiction yw + intensité des deux états ±3 min.</p>
+  <p class="muted">5. <b>Affichage</b> — entre deux ticks, on interpole vers l’état prédit suivant ; les deux hypercubes (passé / futur proches) restent actifs ensemble.</p>
+</div>
+
+<div class="card">
+  <h2>Comptage géométrique</h2>
+  <p class="muted">Sommets : <span id="nV" class="stat">16</span> · Arêtes : <span id="nE" class="stat">32</span> · Faces : <span id="nF" class="stat">24</span> · Cellules : <span id="nC" class="stat">8</span></p>
+  <p class="muted">Dérive μ (par minute) : <span id="mu" class="stat">—</span> · σ journalière : <span id="sigma" class="stat">—</span></p>
+</div>
+</main>
+
+<script>
+'use strict';
+const DAY=86400000, MIN=60000, OFFSET=3*MIN;
+const $=id=>document.getElementById(id);
+const canvas=$('view'), ctx=canvas.getContext('2d');
+
+const VERTICES=[];
+for(let i=0;i<16;i++) VERTICES.push([(i&1)?1:-1,(i&2)?1:-1,(i&4)?1:-1,(i&8)?1:-1]);
+const EDGES=[];
+for(let a=0;a<16;a++) for(let b=a+1;b<16;b++){
+  let d=0; for(let k=0;k<4;k++) if(VERTICES[a][k]!==VERTICES[b][k]) d++;
+  if(d===1) EDGES.push([a,b]);
+}
+const CELLS=[];
+for(let axis=0;axis<4;axis++) for(const sign of [-1,1]){
+  CELLS.push({axis,sign,idxs:VERTICES.map((v,i)=>v[axis]===sign?i:-1).filter(i=>i>=0)});
+}
+
+let rows=[];
+let running=true;
+let t0=performance.now();
+let btcPrice=NaN;
+let btcTime=0; // ms — exact Bitcoin timestamp from API
+let muPerMin=0; // expected log-return per minute
+let sigmaDaily=0.02;
+let midPrice=NaN;
+
+/** Frozen predictions refreshed on each cycle tick. */
+let pred={
+  back:{m:1, price:NaN, t:0, xw:0, yw:0, pulse:1},
+  fwd:{m:1, price:NaN, t:0, xw:0, yw:0, pulse:1},
+  next2:{backXw:0, fwdXw:0},
+  next3:{backYw:0, fwdYw:0, backPulse:1, fwdPulse:1},
+  lastTick2:-1,
+  lastTick3:-1
+};
+
+const usd=n=>Number.isFinite(n)?new Intl.NumberFormat('fr-CH',{maximumFractionDigits:0}).format(n)+' $':'—';
+const clock=ts=>{
+  if(!ts) return '—';
+  return new Intl.DateTimeFormat('fr-CH',{hour:'2-digit',minute:'2-digit',second:'2-digit',day:'2-digit',month:'short',timeZone:'Europe/Zurich'}).format(ts)+' (Zurich)';
+};
+
+function lensFromPrice(p){
+  if(!Number.isFinite(p)||!Number.isFinite(midPrice)||midPrice<=0) return 1;
+  const ratio=p/midPrice;
+  return Math.max(0.55, Math.min(1.85, 0.9 + Math.log(ratio)*4 + sigmaDaily*8));
+}
+
+/** Total ±3 min price prediction from exact Bitcoin time T. */
+function priceAtOffset(deltaMs){
+  if(!Number.isFinite(btcPrice)) return NaN;
+  const minutes=deltaMs/MIN;
+  return btcPrice*Math.exp(muPerMin*minutes);
+}
+
+function forecastAngles(deltaMs, phaseSeed){
+  // Geometry state predicted at T±3min: angles driven by signed offset + BTC drift
+  const sign=deltaMs>=0?1:-1;
+  const mag=Math.abs(deltaMs)/OFFSET; // 1 at ±3 min
+  const drift=muPerMin*10;
+  return {
+    xw:(sign*mag*Math.PI/2 + drift*sign + phaseSeed)*1,
+    yw:(sign*mag*Math.PI/3 - drift*0.7*sign + phaseSeed*0.5),
+    pulse:1+0.18*sign*mag + Math.min(0.25, Math.abs(drift))
+  };
+}
+
+function commitTotalPrediction(seed2, seed3){
+  const tBack=btcTime-OFFSET, tFwd=btcTime+OFFSET;
+  const pBack=priceAtOffset(-OFFSET), pFwd=priceAtOffset(+OFFSET);
+  const mBack=lensFromPrice(pBack), mFwd=lensFromPrice(pFwd);
+  const aBack=forecastAngles(-OFFSET, seed2*0.4+seed3*0.6);
+  const aFwd=forecastAngles(+OFFSET, seed2*0.4+seed3*0.6);
+
+  pred.back={m:mBack, price:pBack, t:tBack, xw:aBack.xw, yw:aBack.yw, pulse:aBack.pulse};
+  pred.fwd={m:mFwd, price:pFwd, t:tFwd, xw:aFwd.xw, yw:aFwd.yw, pulse:aFwd.pulse};
+  // Cycle-specific next-state targets
+  pred.next2={backXw:aBack.xw, fwdXw:aFwd.xw};
+  pred.next3={backYw:aBack.yw, fwdYw:aFwd.yw, backPulse:aBack.pulse, fwdPulse:aFwd.pulse};
+
+  $('tBack').textContent=clock(tBack);
+  $('tNow').textContent=clock(btcTime);
+  $('tFwd').textContent=clock(tFwd);
+  $('pBack').textContent=usd(pBack);
+  $('pNow').textContent=usd(btcPrice);
+  $('pFwd').textContent=usd(pFwd);
+  $('mBack').textContent=Number.isFinite(mBack)?mBack.toFixed(3):'—';
+  $('mNow').textContent=lensFromPrice(btcPrice).toFixed(3);
+  $('mFwd').textContent=Number.isFinite(mFwd)?mFwd.toFixed(3):'—';
+  $('btcClock').textContent='T Bitcoin : '+clock(btcTime);
+}
+
+function updateStats(){
+  $('nV').textContent='16'; $('nE').textContent=String(EDGES.length); $('nF').textContent='24'; $('nC').textContent=String(CELLS.length);
+  $('mu').textContent=(muPerMin*100).toFixed(4)+' %/min';
+  $('sigma').textContent=(sigmaDaily*100).toFixed(2)+' %';
+}
+
+function project(v, state){
+  let [x,y,z,w]=v;
+  const c2=Math.cos(state.xw), s2=Math.sin(state.xw);
+  let x1=x*c2-w*s2, w1=x*s2+w*c2; x=x1; w=w1;
+  const c3=Math.cos(state.yw), s3=Math.sin(state.yw);
+  let y1=y*c3-w*s3, w2=y*s3+w*c3; y=y1; w=w2;
+  const m=state.m*state.pulse;
+  const reflect=1/(2.2 + m*0.55 - w*m*0.35);
+  const X=x*reflect*m;
+  const Y=(y*0.92+z*0.38)*reflect;
+  const Z=(z*0.92-y*0.22)*reflect;
+  const persp=200/(3.2+Z);
+  return [360+X*persp, 240-Y*persp, Z, w];
+}
+
+function drawWire(pts, alphaScale, linkRGB, posRGB, negRGB){
+  const order=EDGES.map((e,i)=>({i,z:(pts[e[0]][2]+pts[e[1]][2])/2})).sort((a,b)=>a.z-b.z);
+  for(const {i} of order){
+    const [a,b]=EDGES[i];
+    const pa=pts[a], pb=pts[b];
+    const link=VERTICES[a][3]!==VERTICES[b][3];
+    ctx.beginPath();
+    ctx.moveTo(pa[0],pa[1]);
+    ctx.lineTo(pb[0],pb[1]);
+    ctx.strokeStyle=link?linkRGB:(VERTICES[a][3]>0?posRGB:negRGB);
+    ctx.globalAlpha=alphaScale*(0.45+0.4*((pa[2]+pb[2]+4)/8));
+    ctx.lineWidth=link?1.6:2.4;
+    ctx.stroke();
+  }
+  ctx.globalAlpha=1;
+  for(let i=0;i<pts.length;i++){
+    const [px,py,pz,w]=pts[i];
+    ctx.beginPath();
+    ctx.arc(px,py,2.6+Math.max(0,2-pz)*0.6,0,Math.PI*2);
+    ctx.fillStyle=w>0?posRGB:negRGB;
+    ctx.globalAlpha=alphaScale;
+    ctx.fill();
+  }
+  ctx.globalAlpha=1;
+}
+
+function lerp(a,b,t){ return a+(b-a)*t; }
+
+function draw(now){
+  const elapsed=(now-t0)/1000;
+  const phase2=((elapsed%2)+2)%2/2;
+  const phase3=((elapsed%3)+3)%3/3;
+  const tick2=Math.floor(elapsed/2);
+  const tick3=Math.floor(elapsed/3);
+  $('phase2').textContent=Math.round(phase2*100)+' %';
+  $('phase3').textContent=Math.round(phase3*100)+' %';
+
+  // Prediction ticks: each cycle completion locks the next ±3 min state for that component
+  if(tick2!==pred.lastTick2){
+    pred.lastTick2=tick2;
+    commitTotalPrediction(tick2, pred.lastTick3<0?0:pred.lastTick3);
+    // 2s cycle owns the next xw prediction target
+    pred.back.xw=pred.next2.backXw;
+    pred.fwd.xw=pred.next2.fwdXw;
+  }
+  if(tick3!==pred.lastTick3){
+    pred.lastTick3=tick3;
+    commitTotalPrediction(pred.lastTick2<0?0:pred.lastTick2, tick3);
+    pred.back.yw=pred.next3.backYw;
+    pred.fwd.yw=pred.next3.fwdYw;
+    pred.back.pulse=pred.next3.backPulse;
+    pred.fwd.pulse=pred.next3.fwdPulse;
+  }
+
+  // Between ticks, ease toward the cycle-owned predicted components
+  const ease2=0.5-0.5*Math.cos(phase2*Math.PI); // smoothstep-ish via cosine
+  const ease3=0.5-0.5*Math.cos(phase3*Math.PI);
+  const backState={
+    m:pred.back.m,
+    pulse:lerp(pred.back.pulse, pred.next3.backPulse, ease3),
+    xw:lerp(pred.back.xw, pred.next2.backXw, ease2),
+    yw:lerp(pred.back.yw, pred.next3.backYw, ease3)
+  };
+  const fwdState={
+    m:pred.fwd.m,
+    pulse:lerp(pred.fwd.pulse, pred.next3.fwdPulse, ease3),
+    xw:lerp(pred.fwd.xw, pred.next2.fwdXw, ease2),
+    yw:lerp(pred.fwd.yw, pred.next3.fwdYw, ease3)
+  };
+
+  const W=canvas.width, H=canvas.height;
+  ctx.clearRect(0,0,W,H);
+  const g=ctx.createRadialGradient(W*0.5,H*0.45,40,W*0.5,H*0.5,320);
+  g.addColorStop(0,'#1a2d48'); g.addColorStop(1,'#101e32');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+
+  const ptsBack=VERTICES.map(v=>project(v, backState));
+  const ptsFwd=VERTICES.map(v=>project(v, fwdState));
+  drawWire(ptsBack, 0.55, 'rgba(191,155,255,0.7)', '#5acfe9', '#3aa8b8');
+  drawWire(ptsFwd, 0.95, '#bf9bff', '#ffbf62', '#ff9b6b');
+
+  ctx.fillStyle='rgba(255,191,98,0.95)';
+  ctx.font='600 14px -apple-system,system-ui,sans-serif';
+  ctx.fillText('Prédiction totale  T±3 min  ·  lentille Bitcoin', 24, 28);
+  ctx.fillStyle='rgba(183,199,223,0.9)';
+  ctx.font='12px -apple-system,system-ui,sans-serif';
+  ctx.fillText('cycle 2 s → xw prédit   ·   cycle 3 s → yw + intensité', 24, 48);
+
+  if(running) requestAnimationFrame(draw);
+}
+
+async function refresh(){
+  $('state').textContent='Récupération prix + horodatage Bitcoin…';
+  $('state').classList.remove('err');
+  try{
+    const [histRes, liveRes]=await Promise.all([
+      fetch('https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=30',{cache:'no-store'}),
+      fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_last_updated_at=true',{cache:'no-store'})
+    ]);
+    if(!histRes.ok||!liveRes.ok) throw Error('API indisponible');
+    const hist=await histRes.json();
+    const live=await liveRes.json();
+    const m=new Map();
+    for(const [ts,p] of hist.prices||[]){
+      if(Number.isFinite(ts)&&Number.isFinite(p)&&p>0) m.set(Math.floor(ts/DAY)*DAY,{t:Math.floor(ts/DAY)*DAY,p});
+    }
+    rows=[...m.values()].sort((a,b)=>a.t-b.t);
+    if(rows.length<8) throw Error('Historique insuffisant');
+    localStorage.setItem('btcMirrorHistory',JSON.stringify(rows));
+
+    btcPrice=live.bitcoin&&live.bitcoin.usd;
+    btcTime=((live.bitcoin&&live.bitcoin.last_updated_at)||0)*1000;
+    if(!btcTime) btcTime=rows.at(-1).t;
+    if(!Number.isFinite(btcPrice)) btcPrice=rows.at(-1).p;
+
+    const a=rows.slice(-15);
+    const rets=a.slice(1).map((r,i)=>Math.log(r.p/a[i].p));
+    sigmaDaily=Math.sqrt(rets.reduce((s,x)=>s+x*x,0)/Math.max(1,rets.length))||0.02;
+    // Convert daily-ish log return mean to per-minute drift for ±3 min horizon
+    const meanRet=rets.reduce((s,x)=>s+x,0)/Math.max(1,rets.length);
+    muPerMin=meanRet/(24*60);
+    midPrice=a[Math.floor(a.length/2)].p;
+
+    $('price').textContent=usd(btcPrice);
+    $('state').textContent='Lentille + T Bitcoin exact synchronisés · Source CoinGecko';
+    localStorage.setItem('btcMirrorLive',JSON.stringify({p:btcPrice,t:btcTime,mu:muPerMin,sigma:sigmaDaily,mid:midPrice}));
+  }catch(e){
+    try{
+      const stored=JSON.parse(localStorage.getItem('btcMirrorHistory')||'[]');
+      const live=JSON.parse(localStorage.getItem('btcMirrorLive')||'{}');
+      if(stored.length>=8){
+        rows=stored;
+        btcPrice=Number.isFinite(live.p)?live.p:rows.at(-1).p;
+        btcTime=live.t||rows.at(-1).t;
+        muPerMin=live.mu||0;
+        sigmaDaily=live.sigma||0.02;
+        midPrice=live.mid||rows[Math.floor(rows.length/2)].p;
+        $('price').textContent=usd(btcPrice);
+        $('state').textContent='Données conservées — prédiction ±3 min sur base locale.';
+      }else throw Error('No cache');
+    }catch{
+      $('state').textContent='Cours indisponibles : prédiction neutre.';
+      $('state').classList.add('err');
+      rows=[]; btcPrice=NaN; btcTime=Date.now(); muPerMin=0; midPrice=1;
+      $('price').textContent='—';
+    }
+  }
+  updateStats();
+  pred.lastTick2=-1; pred.lastTick3=-1; // force re-commit on next frames
+  commitTotalPrediction(0,0);
+}
+
+$('refresh').onclick=refresh;
+$('pause').onclick=()=>{ running=false; $('pause').classList.add('active'); $('resume').classList.remove('active'); };
+$('resume').onclick=()=>{
+  if(running) return;
+  running=true; $('resume').classList.add('active'); $('pause').classList.remove('active');
+  t0=performance.now(); pred.lastTick2=-1; pred.lastTick3=-1;
+  requestAnimationFrame(draw);
+};
+
+refresh();
+requestAnimationFrame(draw);
+setInterval(()=>{ if(!document.hidden) refresh(); }, 180000);
+</script>
+</body>
+</html>
